@@ -4,12 +4,15 @@ Floodlight OpenFlow Controller (OSS)
 Attention!
 ----------
 
+This is my forked version that is mainly changed on branch "v1.2", as the curren project requires this specific version. This will have very specific adjustments to be useful, thats why these changes are not done in the original repository.
+
+Original "Attention!"
+--------------
+
 As of August 2018, the Floodlight mailing list has moved to [floodlight@groups.io](mailto:floodlight@groups.io)! Archives and the new group home page [can be found here](https://groups.io/g/floodlight). Please see [Documentation and Support](#Documentation-and-Support) below for up-to-date support information.
 
 Build Status
 ------------
-
-[![Build Status](https://travis-ci.org/floodlight/floodlight.svg?branch=master)](https://travis-ci.org/floodlight/floodlight)
 
 What is Floodlight?
 -------------------
