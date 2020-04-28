@@ -1,10 +1,11 @@
 Floodlight OpenFlow Controller (OSS)
 ====================================
 
-Build Status:
--------------
+Attention!
+----------
 
-[![Build Status](https://travis-ci.org/floodlight/floodlight.svg?branch=master)](https://travis-ci.org/floodlight/floodlight)
+This is my forked version that is mainly changed on branch "v1.2", as the curren project requires this specific version. This will have very specific adjustments to be useful, thats why these changes are not done in the original repository.
+
 
 Floodlight Wiki
 ---------------
