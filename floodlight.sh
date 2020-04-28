@@ -1,5 +1,5 @@
 #!/bin/sh
-
+#This is a test note to how this commit via submodule works.
 # Set paths
 FL_HOME=`dirname $0`
 FL_JAR="${FL_HOME}/target/floodlight.jar"
