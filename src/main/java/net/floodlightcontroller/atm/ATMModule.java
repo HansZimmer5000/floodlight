@@ -2,7 +2,12 @@ package net.floodlightcontroller.atm;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+
+import org.projectfloodlight.openflow.protocol.OFType;
 
 import net.floodlightcontroller.core.IFloodlightProviderService;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
@@ -17,14 +22,18 @@ public class ATMModule implements IFloodlightModule {
 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
-		// This module does not implement any new services
-		return null;
+		Collection<Class<? extends IFloodlightService>> l = new ArrayList<>();
+	    l.add(IACIDUpdaterService.class);
+	    return l;
 	}
 
 	@Override
 	public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
-		// This module does not implement any new services
-		return null;
+		Map<Class<? extends IFloodlightService>, IFloodlightService> m = new HashMap<>();
+		
+		ACIDUpdaterService updaterService = new ACIDUpdaterService();
+		m.put(IACIDUpdaterService.class, updaterService);
+		return m;
 	}
 
 	@Override
@@ -46,12 +55,23 @@ public class ATMModule implements IFloodlightModule {
 	@Override
 	public void startUp(FloodlightModuleContext context)
 			throws FloodlightModuleException {
+		// Get Implementations
 		IOFSwitchService switchService = context.getServiceImpl(IOFSwitchService.class);
 		IRestApiService restAPIService = context.getServiceImpl(IRestApiService.class);
+		IFloodlightProviderService provider = context.getServiceImpl(IFloodlightProviderService.class);
+		IACIDUpdaterService updater = context.getServiceImpl(IACIDUpdaterService.class);
 		
-		
+		// Add REST
 		RestletRoutable routable = createRestAPI(switchService);
 		restAPIService.addRestletRoutable(routable );
+		
+		// Add OpenFlow Listener
+		List<OFType> messageTypes = new ArrayList<>();
+		messageTypes.add(OFType.ERROR); //TODO Add all types
+		for (Iterator<OFType> iterator = messageTypes.iterator(); iterator.hasNext();) {
+			OFType ofType = (OFType) iterator.next();
+			provider.addOFMessageListener(ofType, updater);
+		}
 	}
 	
 	private RestletRoutable createRestAPI(IOFSwitchService switchService){

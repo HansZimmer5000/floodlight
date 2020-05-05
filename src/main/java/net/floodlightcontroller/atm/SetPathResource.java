@@ -1,7 +1,5 @@
 package net.floodlightcontroller.atm;
 
-import net.floodlightcontroller.core.internal.IOFSwitchService;
-
 import org.restlet.data.Status;
 import org.restlet.resource.Put;
 import org.restlet.resource.ServerResource;
@@ -17,9 +15,11 @@ public class SetPathResource extends ServerResource {
 		Status status = Status.CLIENT_ERROR_BAD_REQUEST;
 		String message = "Error unkown";
 		
-		IOFSwitchService switchService =
-                (IOFSwitchService)getContext().getAttributes().
-                    get(IOFSwitchService.class.getCanonicalName());
+		IACIDUpdaterService updateService =
+                (IACIDUpdaterService)getContext().getAttributes().
+                    get(IACIDUpdaterService.class.getCanonicalName());
+		
+		message = updateService.getName() + " " + updateService.getClass();
 		
 		// For Parameters: String param = (String) getRequestAttributes().get("switch");
 		
@@ -29,7 +29,7 @@ public class SetPathResource extends ServerResource {
 		//TODO Set Path according to ASP
 		
 		setStatus(status, message);
-		return null; // Returning null will still send a response but it seems broken / failure
+		return message; // Returning null will still send a response but it seems broken / failure
 	}
 	
 }
