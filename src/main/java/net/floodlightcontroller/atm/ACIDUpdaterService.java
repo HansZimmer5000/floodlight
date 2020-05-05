@@ -13,10 +13,12 @@ import net.floodlightcontroller.core.IOFSwitch;
 
 public class ACIDUpdaterService implements IACIDUpdaterService {
 
-	Map<Byte, List<MessagePair>> messages;
+	Map<Byte[], List<MessagePair>> messages;
+	Byte atmID;
 
 	public ACIDUpdaterService() {
 		messages = new HashMap<>();
+		this.atmID = getRandomByte();
 	}
 
 	@Override
@@ -42,7 +44,7 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 
 		// TODO simple, in the future extract XID and put each message according
 		// to its xid in specific Lists
-		Byte simpleTestXid = 49;
+		Byte[] simpleTestXid = new Byte[]{49};
 		MessagePair newPair = new MessagePair(sw, msg);
 		
 		List<MessagePair> currentList = this.messages.get(simpleTestXid);
@@ -53,5 +55,48 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 		this.messages.put(simpleTestXid, currentList);
 		
 		return Command.CONTINUE;
+	}
+
+	@Override
+	public void voteLock(List<IOFSwitch> switches) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void rollback(List<IOFSwitch> switches) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void commit(List<IOFSwitch> switches) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public Byte[] createNewUpdateIDAndPrepareMessages() {
+		Byte[] updateID = new Byte[4];
+		
+		updateID[0] = this.atmID;
+		updateID[1] = getRandomByte();
+		updateID[2] = getRandomByte();
+		updateID[3] = getRandomByte();
+		
+		this.messages.put(updateID, new ArrayList<MessagePair>());
+
+		return updateID;
+	}
+	
+	private Byte getRandomByte(){
+		Double randomDbl = Math.random() % 256;
+		return randomDbl.byteValue();
+	}
+
+	@Override
+	public List<MessagePair> getMessages(Byte[] updateID) {
+		List<MessagePair> result = this.messages.get(updateID);
+		return result;
 	}
 }
