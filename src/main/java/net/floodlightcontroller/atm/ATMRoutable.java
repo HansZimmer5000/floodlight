@@ -28,31 +28,4 @@ public class ATMRoutable implements RestletRoutable {
 	public String basePath() {
 		return "/atm";
 	}
-	
-	public class SetPathResource extends ServerResource {
-		private Logger log = LoggerFactory.getLogger(SetPathResource.class);
-		
-		@Put
-		public String SetPath(String jsonBody){
-			log.debug("SetPathReceived:" + jsonBody);
-			Status status = Status.CLIENT_ERROR_BAD_REQUEST;
-			String message = "Error unkown";
-			
-			IOFSwitchService switchService =
-	                (IOFSwitchService)getContext().getAttributes().
-	                    get(IOFSwitchService.class.getCanonicalName());
-			
-			// For Parameters: String param = (String) getRequestAttributes().get("switch");
-			
-			//TODO Extract Info from JSON
-			//rowValues = StaticEntries.jsonToStorageEntry(jsonBody);
-			
-			//TODO Set Path according to ASP
-			
-			setStatus(status, message);
-			return null;
-		}
-		
-	}
-
 }
