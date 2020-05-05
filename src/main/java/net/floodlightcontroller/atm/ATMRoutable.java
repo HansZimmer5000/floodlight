@@ -1,7 +1,5 @@
 package net.floodlightcontroller.atm;
 
-import java.util.Map;
-
 import org.restlet.Context;
 import org.restlet.Restlet;
 import org.restlet.data.Status;
@@ -21,7 +19,7 @@ public class ATMRoutable implements RestletRoutable {
 	public Restlet getRestlet(Context context) {
         Router router = new Router(context);
         
-        router.attach("/path", SetPath.class);
+        router.attach("/path", SetPathResource.class);
         
         return router;
 	}
@@ -31,8 +29,8 @@ public class ATMRoutable implements RestletRoutable {
 		return "/atm";
 	}
 	
-	public class SetPath extends ServerResource {
-		private Logger log = LoggerFactory.getLogger(SetPath.class);
+	public class SetPathResource extends ServerResource {
+		private Logger log = LoggerFactory.getLogger(SetPathResource.class);
 		
 		@Put
 		public String SetPath(String jsonBody){
