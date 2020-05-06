@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.projectfloodlight.openflow.protocol.OFFlowAdd;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFType;
 
@@ -58,7 +59,7 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 	}
 
 	@Override
-	public void voteLock(List<IOFSwitch> switches) {
+	public void voteLock(List<IOFSwitch> switches, List<OFFlowAdd> flowMods) {
 		// TODO Auto-generated method stub
 		
 	}
