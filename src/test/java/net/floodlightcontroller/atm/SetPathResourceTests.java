@@ -20,7 +20,8 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	private static String exampleCookieBool = "0";
 	private static String examplePrio = "32768";
 	private static String exampleIngressPort = "1";
-	private static String exampleActions = "output=2";
+	private static String exampleOutPort = "2";
+	private static String exampleActions = "output=" + exampleOutPort;
 	private static String exampleJson = "{\n" + "\"switch\":       \""
 			+ exampleDPID + "\",\n" + "\"name\":         \"" + exampleFlowName
 			+ "\",\n" + "\"cookie\":       \"" + exampleCookieBool + "\",\n"
@@ -65,21 +66,22 @@ public class SetPathResourceTests extends FloodlightTestCase {
 
 	@Test
 	public void testcreateFlowMod() throws Exception {
-		int outPort = 2;
 		long xid = 16;
 
-		OFFlowAdd testMod1 = this.setPathResource.createFlowMod(exampleJson, xid);
+		OFFlowAdd testMod1 = this.setPathResource.createFlowMod(exampleJson,
+				xid);
 
 		Assert.assertEquals("OF_14", testMod1.getVersion().toString());
-		Assert.assertEquals(outPort, testMod1.getOutPort().getPortNumber());
+		Assert.assertEquals(exampleOutPort, testMod1.getOutPort()
+				.getPortNumber());
 		Assert.assertEquals(16, testMod1.getXid());
 		Assert.assertEquals("ADD", testMod1.getCommand().toString());
 
 		Assert.assertEquals(1, testMod1.getInstructions().size());
 		Assert.assertTrue(testMod1.getInstructions().get(0).toString()
-				.indexOf("port=" + String.valueOf(outPort)) > 0);
+				.indexOf("port=" + String.valueOf(exampleOutPort)) > 0);
 
-		Assert.assertEquals(1, testMod1.getMatch().get(MatchField.IN_PORT)
+		Assert.assertEquals((int) Integer.getInteger(exampleIngressPort), testMod1.getMatch().get(MatchField.IN_PORT)
 				.getPortNumber());
 		Assert.assertEquals(EthType.IPv4,
 				testMod1.getMatch().get(MatchField.ETH_TYPE));
