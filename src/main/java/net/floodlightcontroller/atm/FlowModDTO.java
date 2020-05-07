@@ -3,8 +3,11 @@ package net.floodlightcontroller.atm;
 
 public class FlowModDTO {
 
-	public String dpid, name;
-	public int inPort, outPort;
+	public static final String STRING_DEFAULT="";
+	public static final int INT_DEFAULT=-1;
+	
+	public String dpid = STRING_DEFAULT, name = STRING_DEFAULT;
+	public int inPort = INT_DEFAULT, outPort = INT_DEFAULT;
 
 	public FlowModDTO() {
 	}
