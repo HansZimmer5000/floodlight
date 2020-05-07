@@ -191,37 +191,32 @@ public class SetPathResource extends ServerResource {
 	// Create a Flowmod that someone has to write to a switch with:
 	// IOFSwitch.write(flow);
 	public OFFlowAdd createFlowMod(String json, long xid) {
-		// TODO How do I know which inPort is right? -> will be set in map as ingress-port
-		// TODO How do I know which ourPort is right? -> will be set in map within actions
-		// TODO set tableID here with some of the builders
+		// TODO set tableID here with some of the builders (is this neccesarry for for VoteLock?)
+
+		TableId tableID = TableId.of(255);
+		int outPort = 0, inPort = 0;
+		OFFlowAdd flow = null;
 
 		try {
 			Map<String, String> map = convertJsonToMap(json);
-		} catch (IOException e) {
-			e.printStackTrace();
+			String rawOutPort = map.get("actions");
+			outPort = Integer.parseInt(rawOutPort);
+			String rawInPort = map.get("ingress-port");
+			inPort = Integer.parseInt(rawInPort);
+
+			OFFactoryVer14 myFactory = new OFFactoryVer14();
+
+			List<OFAction> actions = createActions(myFactory, outPort);
+			Match match = createMatch(myFactory, inPort);
+
+			flow = myFactory.buildFlowAdd().setMatch(match).setActions(actions)
+					.setOutPort(OFPort.of(outPort))
+					.setBufferId(OFBufferId.NO_BUFFER).setXid(xid)
+					.setTableId(tableID).build();
+
+		} catch (Exception e) {
+			log.debug("Convertion to Map was not successfull: " + e.getMessage());
 		}
-
-		TableId tableID = TableId.of(255);
-		int outPort = 2;
-
-		//TODO Fit to actually create a useful FlowAdd
-		ArrayList<OFAction> actions = new ArrayList<OFAction>();
-		OFFactoryVer14 myFactory = new OFFactoryVer14();
-
-		OFAction action = myFactory.actions().buildOutput()
-				.setPort(OFPort.of(outPort)).build();
-		actions.add(action);
-
-		MatchField<OFPort> matchField1 = MatchField.IN_PORT;
-		MatchField<EthType> matchField2 = MatchField.ETH_TYPE;
-
-		Match match1 = myFactory.buildMatch()
-				.setExact(matchField1, OFPort.of(1))
-				.setExact(matchField2, EthType.IPv4).build();
-
-		OFFlowAdd flow = myFactory.buildFlowAdd().setMatch(match1)
-				.setActions(actions).setOutPort(OFPort.of(outPort))
-				.setBufferId(OFBufferId.NO_BUFFER).setXid(xid).setTableId(tableID).build();
 
 		return flow;
 	}
@@ -231,7 +226,7 @@ public class SetPathResource extends ServerResource {
 
 		MappingJsonFactory f = new MappingJsonFactory();
 		JsonParser jp;
-		
+
 		try {
 			jp = f.createParser(json);
 		} catch (JsonParseException e) {
@@ -269,11 +264,41 @@ public class SetPathResource extends ServerResource {
 				entry.put("ingress-port", jp.getText());
 				break;
 			case StaticFlowEntryPusher.COLUMN_ACTIONS:
-				entry.put(StaticFlowEntryPusher.COLUMN_ACTIONS, jp.getText());
+				String rawValue = jp.getText();
+				if (rawValue.contains("output=")) {
+					rawValue = rawValue.replace("output=", "");
+					try {
+						Integer.parseInt(rawValue);
+						entry.put(StaticFlowEntryPusher.COLUMN_ACTIONS,
+								rawValue);
+					} catch (NumberFormatException e) {
+						log.debug("Json included action that was not convertable to int: "
+								+ rawValue);
+						throw e;
+					}
+				}
 				break;
 			}
 		}
 
 		return entry;
+	}
+
+	public List<OFAction> createActions(OFFactoryVer14 myFactory, int outPort) {
+		ArrayList<OFAction> actions = new ArrayList<OFAction>();
+		OFAction action = myFactory.actions().buildOutput()
+				.setPort(OFPort.of(outPort)).build();
+		actions.add(action);
+		return actions;
+	}
+
+	public Match createMatch(OFFactoryVer14 myFactory, int inPort) {
+		MatchField<OFPort> matchField1 = MatchField.IN_PORT;
+		MatchField<EthType> matchField2 = MatchField.ETH_TYPE;
+
+		Match match = myFactory.buildMatch()
+				.setExact(matchField1, OFPort.of(inPort))
+				.setExact(matchField2, EthType.IPv4).build();
+		return match;
 	}
 }
