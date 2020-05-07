@@ -1,26 +1,15 @@
 package net.floodlightcontroller.atm;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
-import net.floodlightcontroller.staticflowentry.StaticFlowEntries;
-import net.floodlightcontroller.staticflowentry.StaticFlowEntryPusher;
-import net.floodlightcontroller.util.MatchUtils;
 
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
-import org.projectfloodlight.openflow.protocol.OFFlowMod;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
-import org.projectfloodlight.openflow.protocol.match.MatchFields;
-import org.projectfloodlight.openflow.protocol.ver10.OFFactoryVer10;
-import org.projectfloodlight.openflow.protocol.ver11.OFFactoryVer11;
 import org.projectfloodlight.openflow.protocol.ver14.OFFactoryVer14;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
@@ -33,21 +22,13 @@ import org.restlet.resource.ServerResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.databind.MappingJsonFactory;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class SetPathResource extends ServerResource {
 	protected static Logger log = LoggerFactory
 			.getLogger(SetPathResource.class);
 	static final long ASP_TIMEOUT_MS = 1;
-
-	/*
-	 * Expect a JSON like: { "switch": "AA:BB:CC:DD:EE:FF:00:11", "name":
-	 * "flow-mod-1", "cookie": "0", "priority": "32768", "ingress-port": "1",
-	 * "actions": "output=2", }
-	 */
 
 	@Put
 	public String SetPath(String jsonBody) {
@@ -55,7 +36,9 @@ public class SetPathResource extends ServerResource {
 
 		// TODO Set status and message if error occurs somehwere during
 		// execution
-		Status status = Status.SUCCESS_NO_CONTENT;
+		// TODO 418 = new Status(418);
+
+		Status status;
 		String message = "";
 
 		// Get Services
@@ -67,29 +50,64 @@ public class SetPathResource extends ServerResource {
 				.getAttributes().get(IOFSwitchService.class.getCanonicalName());
 
 		// Extract info from Request
-		String path = extractPath(jsonBody);
+		ArrayList<FlowModDTO> flowModDTOs = convertJsonToDTO(jsonBody);
 
 		// Prepare Update
-		List<IOFSwitch> affectedSwitches = extractSwitches(switchService, path);
 		Byte[] updateID = updateService.createNewUpdateIDAndPrepareMessages();
-		List<OFFlowAdd> flowMods = createFlowMods(jsonBody, updateID);
-		List<MessagePair> messages = updateService.getMessages(updateID);
-
-		if (messages == null) {
-			log.debug("Messages was null!");
+		List<OFFlowAdd> flowMods = createFlowMods(flowModDTOs, updateID);
+		if (flowMods != null) {
+			status = getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
+					switchService, updateService, flowModDTOs, flowMods,
+					updateID);
 		} else {
-			// Update
-			updateNetwork(updateService, flowMods, affectedSwitches, messages);
+			log.debug("FlowMods could not be created");
+			status = Status.CLIENT_ERROR_BAD_REQUEST;
 		}
 
 		// Respond to user
-		setStatus(status, message);
-		return message; // Returning null will still send a response but it
-						// seems broken / failure
+		setStatus(status);
+		return message;
+	}
+
+	public Status getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
+			IOFSwitchService switchService, IACIDUpdaterService updateService,
+			ArrayList<FlowModDTO> flowModDTOs, List<OFFlowAdd> flowMods,
+			Byte[] updateID) {
+		Status status;
+		ArrayList<IOFSwitch> affectedSwitches = getAffectedSwitches(
+				switchService, flowModDTOs);
+		if (flowModDTOs.size() == affectedSwitches.size()) {
+
+			status = getMessagesAndUpdateNetwork(updateService, flowMods,
+					affectedSwitches, updateID);
+		} else {
+			log.debug("Could not find all switches");
+			status = Status.CLIENT_ERROR_NOT_FOUND;
+		}
+
+		return status;
+	}
+
+	public Status getMessagesAndUpdateNetwork(
+			IACIDUpdaterService updateService, List<OFFlowAdd> flowMods,
+			ArrayList<IOFSwitch> affectedSwitches, Byte[] updateID) {
+		Status status;
+		List<MessagePair> messages = updateService.getMessages(updateID);
+		if (messages != null) {
+
+			// Update
+			updateNetwork(updateService, flowMods, affectedSwitches, messages);
+			status = Status.SUCCESS_NO_CONTENT;
+		} else {
+			log.debug("Messages was null");
+			status = Status.SERVER_ERROR_INTERNAL;
+		}
+
+		return status;
 	}
 
 	public void updateNetwork(IACIDUpdaterService updateService,
-			List<OFFlowAdd> flowMods, List<IOFSwitch> affectedSwitches,
+			List<OFFlowAdd> flowMods, ArrayList<IOFSwitch> affectedSwitches,
 			List<MessagePair> messages) {
 
 		try {
@@ -141,7 +159,7 @@ public class SetPathResource extends ServerResource {
 	}
 
 	public List<IOFSwitch> executeThirdPhase(IACIDUpdaterService updateService,
-			List<IOFSwitch> affectedSwitches, List<MessagePair> messages)
+			ArrayList<IOFSwitch> affectedSwitches, List<MessagePair> messages)
 			throws InterruptedException {
 		updateService.commit(affectedSwitches);
 		Thread.sleep(1000); // TODO how long to wait? Or actively check
@@ -154,47 +172,71 @@ public class SetPathResource extends ServerResource {
 		return unfinishedSwitches;
 	}
 
+	public ArrayList<IOFSwitch> getAffectedSwitches(
+			IOFSwitchService switchService, List<FlowModDTO> flowModDTOs) {
+		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
+
+		for (FlowModDTO currentFlowModDTO : flowModDTOs) {
+			DatapathId dpid = DatapathId.of(currentFlowModDTO.dpid);
+			IOFSwitch currentSwitch = switchService.getSwitch(dpid);
+			affectedSwitches.add(currentSwitch);
+		}
+
+		return affectedSwitches;
+	}
+
 	public List<IOFSwitch> getUnfinishedSwitches(List<MessagePair> messages,
-			List<IOFSwitch> affectedSwitches) {
-		// TODO Auto-generated method stub
-		return new ArrayList<>();
+			ArrayList<IOFSwitch> affectedSwitches) {
+		List<IOFSwitch> unfinishedSwitches = new ArrayList<>(affectedSwitches);
+		IOFSwitch messageSwitch;
+		boolean elemIsRemoved;
+
+		for (MessagePair currentMP : messages) {
+			messageSwitch = currentMP.ofswitch;
+			elemIsRemoved = unfinishedSwitches.remove(messageSwitch);
+			if (!elemIsRemoved) {
+				log.debug("Finished Switch could not be removed: "
+						+ messageSwitch.getId().toString());
+			}
+		}
+
+		return unfinishedSwitches;
 	}
 
 	public List<IOFSwitch> getUnconfirmedSwitches(List<MessagePair> messages,
 			List<IOFSwitch> affectedSwitches) {
-		// TODO Auto-generated method stub
-		return new ArrayList<>();
+		List<IOFSwitch> unconfirmedSwitches = new ArrayList<>(affectedSwitches);
+		IOFSwitch messageSwitch;
+		boolean elemIsRemoved;
+
+		for (MessagePair currentMP : messages) {
+			messageSwitch = currentMP.ofswitch;
+			elemIsRemoved = unconfirmedSwitches.remove(messageSwitch);
+			if (!elemIsRemoved) {
+				log.debug("Confirmed Switch could not be removed: "
+						+ messageSwitch.getId().toString());
+			}
+		}
+
+		return unconfirmedSwitches;
 	}
 
-	public List<IOFSwitch> extractSwitches(IOFSwitchService switchService,
-			String path) {
-		// TODO Auto-generated method stub
-		return new ArrayList<>();
-	}
-
-	public String extractPath(String json) {
-		// TODO
-		return "NOT IMPLEMENTED YET";
-	}
-
-	public List<OFFlowAdd> createFlowMods(String json, Byte[] updateID) {
+	public List<OFFlowAdd> createFlowMods(ArrayList<FlowModDTO> flowModDTOs,
+			Byte[] updateID) {
 		// TODO Create FlowMod per switch within the path
-		
+
 		List<OFFlowAdd> result = new ArrayList<>();
 		OFFlowAdd newFlowMod;
-		String flowJson = "TODO";
-		
-        long xid = 0;
-        for (int i = 0; i < updateID.length; i++) {
-            xid = xid << 8;
-            xid += updateID[i];
-        }
 
-		newFlowMod = createFlowMod(flowJson, xid);
-		if (null == newFlowMod) {
-			return null;
-		} else {
-			result.add(newFlowMod);
+		long xid = convertByteArrToLong(updateID);
+
+		for (FlowModDTO currentFlowModDTO : flowModDTOs) {
+			newFlowMod = createFlowMod(currentFlowModDTO, xid);
+			if (newFlowMod == null) {
+				return null;
+			} else {
+				result.add(newFlowMod);
+			}
 		}
 
 		return result;
@@ -202,98 +244,55 @@ public class SetPathResource extends ServerResource {
 
 	// Create a Flowmod that someone has to write to a switch with:
 	// IOFSwitch.write(flow);
-	public OFFlowAdd createFlowMod(String json, long xid) {
-		// TODO set tableID here with some of the builders (is this neccesarry for for VoteLock?)
+	public OFFlowAdd createFlowMod(FlowModDTO flowModDTO, long xid) {
+		// TODO set tableID here with some of the builders (is this neccesarry
+		// for for VoteLock?)
 
-		TableId tableID = TableId.of(255);
-		int outPort = 0, inPort = 0;
-		OFFlowAdd flow = null;
-
-		try {
-			Map<String, String> map = convertJsonToMap(json);
-			String rawOutPort = map.get("actions");
-			outPort = Integer.parseInt(rawOutPort);
-			String rawInPort = map.get("ingress-port");
-			inPort = Integer.parseInt(rawInPort);
+		if (flowModDTO.dpid == FlowModDTO.STRING_DEFAULT
+				|| flowModDTO.name == FlowModDTO.STRING_DEFAULT
+				|| flowModDTO.inPort == FlowModDTO.INT_DEFAULT
+				|| flowModDTO.outPort == FlowModDTO.INT_DEFAULT) {
+			return null;
+		} else {
+			TableId tableID = TableId.of(255);
+			int inPort = flowModDTO.inPort;
+			int outPort = flowModDTO.outPort;
 
 			OFFactoryVer14 myFactory = new OFFactoryVer14();
-
 			List<OFAction> actions = createActions(myFactory, outPort);
 			Match match = createMatch(myFactory, inPort);
 
-			flow = myFactory.buildFlowAdd().setMatch(match).setActions(actions)
-					.setOutPort(OFPort.of(outPort))
+			OFFlowAdd flow = myFactory.buildFlowAdd().setMatch(match)
+					.setActions(actions).setOutPort(OFPort.of(outPort))
 					.setBufferId(OFBufferId.NO_BUFFER).setXid(xid)
 					.setTableId(tableID).build();
 
-		} catch (Exception e) {
-			log.debug("Convertion to Map was not successfull: " + e.getMessage());
+			return flow;
 		}
-
-		return flow;
 	}
 
-	public Map<String, String> convertJsonToMap(String json) throws IOException {
-		Map<String, String> entry = new HashMap<String, String>();
+	public long convertByteArrToLong(Byte[] bytes) {
+		long result = 0;
+		for (int i = 0; i < bytes.length; i++) {
+			result = result << 8;
+			result += bytes[i];
+		}
+		return result;
+	}
 
-		MappingJsonFactory f = new MappingJsonFactory();
-		JsonParser jp;
-
+	public ArrayList<FlowModDTO> convertJsonToDTO(String json) {
+		ObjectMapper mapper = new ObjectMapper();
+		ArrayList<FlowModDTO> result;
+		
 		try {
-			jp = f.createParser(json);
-		} catch (JsonParseException e) {
-			throw new IOException(e);
+			result = mapper.readValue(json,
+					new TypeReference<ArrayList<FlowModDTO>>() {
+					});
+		} catch (Exception e) {
+			log.debug(e.getMessage());
+			return null;
 		}
-
-		jp.nextToken();
-		if (jp.getCurrentToken() != JsonToken.START_OBJECT) {
-			throw new IOException("Expected START_OBJECT");
-		}
-
-		while (jp.nextToken() != JsonToken.END_OBJECT) {
-			if (jp.getCurrentToken() != JsonToken.FIELD_NAME) {
-				throw new IOException("Expected FIELD_NAME");
-			}
-
-			String n = jp.getCurrentName();
-			jp.nextToken();
-
-			switch (n) {
-			case StaticFlowEntryPusher.COLUMN_SWITCH:
-				entry.put(StaticFlowEntryPusher.COLUMN_SWITCH, jp.getText());
-				break;
-			case StaticFlowEntryPusher.COLUMN_NAME:
-				entry.put(StaticFlowEntryPusher.COLUMN_NAME, jp.getText());
-				break;
-			case StaticFlowEntryPusher.COLUMN_COOKIE: // set manually, or
-				// computed from name
-				entry.put(StaticFlowEntryPusher.COLUMN_COOKIE, jp.getText());
-				break;
-			case StaticFlowEntryPusher.COLUMN_PRIORITY:
-				entry.put(StaticFlowEntryPusher.COLUMN_PRIORITY, jp.getText());
-				break;
-			case "ingress-port":
-				entry.put("ingress-port", jp.getText());
-				break;
-			case StaticFlowEntryPusher.COLUMN_ACTIONS:
-				String rawValue = jp.getText();
-				if (rawValue.contains("output=")) {
-					rawValue = rawValue.replace("output=", "");
-					try {
-						Integer.parseInt(rawValue);
-						entry.put(StaticFlowEntryPusher.COLUMN_ACTIONS,
-								rawValue);
-					} catch (NumberFormatException e) {
-						log.debug("Json included action that was not convertable to int: "
-								+ rawValue);
-						throw e;
-					}
-				}
-				break;
-			}
-		}
-
-		return entry;
+		return result;
 	}
 
 	public List<OFAction> createActions(OFFactoryVer14 myFactory, int outPort) {
