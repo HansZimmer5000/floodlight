@@ -10,6 +10,9 @@ import org.projectfloodlight.openflow.protocol.OFFlowAdd;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.types.EthType;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import net.floodlightcontroller.test.FloodlightTestCase;
 
 public class SetPathResourceTests extends FloodlightTestCase {
@@ -133,5 +136,16 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		} catch (IOException e) {
 			Assert.fail(e.toString());
 		}
+	}
+	
+	@Test
+	public void whenSerializeAndDeserializeUsingJackson_thenCorrect() 
+	  throws IOException{
+	    Request foo = new Request(1,"first");
+	    ObjectMapper mapper = new ObjectMapper();
+
+	    String jsonStr = mapper.writeValueAsString(foo);
+	    Request result = mapper.readValue(jsonStr, new TypeReference<Request>() {});
+	    Assert.assertEquals(foo.id,result.id);
 	}
 }
