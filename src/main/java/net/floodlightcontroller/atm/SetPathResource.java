@@ -282,7 +282,7 @@ public class SetPathResource extends ServerResource {
 
 	public ArrayList<FlowModDTO> convertJsonToDTO(String json) {
 		ObjectMapper mapper = new ObjectMapper();
-		ArrayList<FlowModDTO> result;
+		ArrayList<FlowModDTO> result = new ArrayList<>();
 		
 		try {
 			result = mapper.readValue(json,
@@ -290,7 +290,6 @@ public class SetPathResource extends ServerResource {
 					});
 		} catch (Exception e) {
 			log.debug(e.getMessage());
-			return null;
 		}
 		return result;
 	}

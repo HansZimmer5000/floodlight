@@ -23,19 +23,17 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	private static String exampleFlowName = "flow-mode-1";
 	private static int exampleInPort = 1;
 	private static int exampleOutPort = 2;
-	private static String exampleJson = "{\n" 
-			+ "\"dpid\":       \""+ exampleDPID + "\",\n" 
-			+ "\"name\":         \"" + exampleFlowName+ "\",\n" 
-			+ "\"inPort\": 		 \"" + String.valueOf(exampleInPort)+ "\",\n" 
-			+ "\"outPort\":      \"" + String.valueOf(exampleOutPort)
+	private static String exampleJson = "{\n" + "\"dpid\":       \""
+			+ exampleDPID + "\",\n" + "\"name\":         \"" + exampleFlowName
+			+ "\",\n" + "\"inPort\": 		 \"" + String.valueOf(exampleInPort)
+			+ "\",\n" + "\"outPort\":      \"" + String.valueOf(exampleOutPort)
 			+ "\"\n" + "}";
 	private static String exampleEmptyJson = "{}";
-	private static String exampleWrongFormatJson = "\n"
-			+ "\"dpid\":       \"" + exampleDPID + "\",\n"
-			+ "\"name\":         \"" + exampleFlowName + "\",\n"
-			+ "\"inPort\": \"" + String.valueOf(exampleInPort) + "\",\n"
-			+ "\"outPort\":      \"" + String.valueOf(exampleOutPort) + "\"\n"
-			+ "";
+	private static String exampleWrongFormatJson = "\n" + "\"dpid\":       \""
+			+ exampleDPID + "\",\n" + "\"name\":         \"" + exampleFlowName
+			+ "\",\n" + "\"inPort\": \"" + String.valueOf(exampleInPort)
+			+ "\",\n" + "\"outPort\":      \"" + String.valueOf(exampleOutPort)
+			+ "\"\n" + "";
 
 	@Override
 	public void setUp() throws Exception {
@@ -115,7 +113,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	public void whenConvertJsonToMap_thenCorrect() {
 
 		ArrayList<FlowModDTO> testFlows = this.setPathResource
-				.convertJsonToDTO("["+exampleJson+"]");
+				.convertJsonToDTO("[" + exampleJson + "]");
 		Assert.assertEquals(1, testFlows.size());
 
 		FlowModDTO testFlow = testFlows.get(0);
@@ -125,6 +123,20 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		Assert.assertEquals(exampleInPort, testFlow.inPort);
 		Assert.assertEquals(exampleOutPort, testFlow.outPort);
 
+	}
+
+	@Test
+	public void whenConvertJsonToMap_thenFail1() {
+
+		ArrayList<FlowModDTO> flowMods = this.setPathResource.convertJsonToDTO(exampleWrongFormatJson);
+		Assert.assertEquals(0, flowMods.size());
+	}
+	
+	@Test
+	public void whenConvertJsonToMap_thenFail2() {
+
+		ArrayList<FlowModDTO> flowMods = this.setPathResource.convertJsonToDTO(exampleEmptyJson);
+		Assert.assertEquals(0, flowMods.size());
 	}
 
 	@Test
@@ -162,6 +174,5 @@ public class SetPathResourceTests extends FloodlightTestCase {
 
 			Assert.assertTrue(currentOriginal.equals(currentResult));
 		}
-
 	}
 }
