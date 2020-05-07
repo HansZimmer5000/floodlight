@@ -1,6 +1,7 @@
 package net.floodlightcontroller.atm;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -66,13 +67,12 @@ public class SetPathResource extends ServerResource {
 				.getAttributes().get(IOFSwitchService.class.getCanonicalName());
 
 		// Extract info from Request
-		String hosts = extractHosts(jsonBody);
 		String path = extractPath(jsonBody);
 
 		// Prepare Update
 		List<IOFSwitch> affectedSwitches = extractSwitches(switchService, path);
-		List<OFFlowAdd> flowMods = createFlowMods();
 		Byte[] updateID = updateService.createNewUpdateIDAndPrepareMessages();
+		List<OFFlowAdd> flowMods = createFlowMods(jsonBody, updateID);
 		List<MessagePair> messages = updateService.getMessages(updateID);
 
 		if (messages == null) {
@@ -172,19 +172,31 @@ public class SetPathResource extends ServerResource {
 		return new ArrayList<>();
 	}
 
-	public String extractHosts(String json) {
-		// TODO
-		return "NOT IMPLEMENTED YET";
-	}
-
 	public String extractPath(String json) {
 		// TODO
 		return "NOT IMPLEMENTED YET";
 	}
 
-	public List<OFFlowAdd> createFlowMods() {
+	public List<OFFlowAdd> createFlowMods(String json, Byte[] updateID) {
 		// TODO Create FlowMod per switch within the path
+		
 		List<OFFlowAdd> result = new ArrayList<>();
+		OFFlowAdd newFlowMod;
+		String flowJson = "TODO";
+		
+        long xid = 0;
+        for (int i = 0; i < updateID.length; i++) {
+            xid = xid << 8;
+            xid += updateID[i];
+        }
+
+		newFlowMod = createFlowMod(flowJson, xid);
+		if (null == newFlowMod) {
+			return null;
+		} else {
+			result.add(newFlowMod);
+		}
+
 		return result;
 	}
 
