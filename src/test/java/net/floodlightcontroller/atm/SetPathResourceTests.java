@@ -19,16 +19,24 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	private static String exampleFlowName = "flow-mode-1";
 	private static String exampleCookieBool = "0";
 	private static String examplePrio = "32768";
-	private static String exampleIngressPort = "1";
-	private static String exampleOutPort = "2";
-	private static String exampleActions = "output=" + exampleOutPort;
+	private static int exampleIngressPort = 1;
+	private static int exampleOutPort = 2;
 	private static String exampleJson = "{\n" + "\"switch\":       \""
 			+ exampleDPID + "\",\n" + "\"name\":         \"" + exampleFlowName
 			+ "\",\n" + "\"cookie\":       \"" + exampleCookieBool + "\",\n"
 			+ "\"priority\":     \"" + examplePrio + "\",\n"
-			+ "\"ingress-port\": \"" + exampleIngressPort + "\",\n"
-			+ "\"actions\":      \"" + exampleActions + "\"\n" + "}";
-
+			+ "\"ingress-port\": \"" + String.valueOf(exampleIngressPort)
+			+ "\",\n" + "\"actions\":      \"output="
+			+ String.valueOf(exampleOutPort) + "\"\n" + "}";
+	private static String exampleEmptyJson = "{}";
+	private static String exampleWrongFormatJson = "\n" + "\"switch\":       \""
+			+ exampleDPID + "\",\n" + "\"name\":         \"" + exampleFlowName
+			+ "\",\n" + "\"cookie\":       \"" + exampleCookieBool + "\",\n"
+			+ "\"priority\":     \"" + examplePrio + "\",\n"
+			+ "\"ingress-port\": \"" + String.valueOf(exampleIngressPort)
+			+ "\",\n" + "\"actions\":      \"output="
+			+ String.valueOf(exampleOutPort) + "\"\n" + "";
+			
 	@Override
 	public void setUp() throws Exception {
 		this.setPathResource = new SetPathResource();
@@ -65,7 +73,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	}
 
 	@Test
-	public void testcreateFlowMod() throws Exception {
+	public void testPoscreateFlowMod() throws Exception {
 		long xid = 16;
 
 		OFFlowAdd testMod1 = this.setPathResource.createFlowMod(exampleJson,
@@ -77,19 +85,39 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		Assert.assertEquals(16, testMod1.getXid());
 		Assert.assertEquals("ADD", testMod1.getCommand().toString());
 
+		// Test Instructions (Actions)
 		Assert.assertEquals(1, testMod1.getInstructions().size());
 		Assert.assertTrue(testMod1.getInstructions().get(0).toString()
 				.indexOf("port=" + String.valueOf(exampleOutPort)) > 0);
 
-		Assert.assertEquals((int) Integer.getInteger(exampleIngressPort), testMod1.getMatch().get(MatchField.IN_PORT)
-				.getPortNumber());
+		Assert.assertEquals(exampleIngressPort,
+				testMod1.getMatch().get(MatchField.IN_PORT).getPortNumber());
 		Assert.assertEquals(EthType.IPv4,
 				testMod1.getMatch().get(MatchField.ETH_TYPE));
 	}
 
 	@Test
-	public void testconvertJsonToMap() {
+	public void testNeg1createFlowMod() throws Exception {
+		long xid = 16;
 
+		OFFlowAdd testMod1 = this.setPathResource.createFlowMod(
+				exampleEmptyJson, xid);
+
+		Assert.assertEquals(null, testMod1);
+	}
+
+	@Test
+	public void testNeg2createFlowMod() throws Exception {
+		long xid = 16;
+
+		OFFlowAdd testMod1 = this.setPathResource.createFlowMod(
+				exampleWrongFormatJson, xid);
+
+		Assert.assertEquals(null, testMod1);
+	}
+	
+	@Test
+	public void testconvertJsonToMap() {
 		try {
 			Map<String, String> testMap = this.setPathResource
 					.convertJsonToMap(exampleJson);
@@ -98,11 +126,12 @@ public class SetPathResourceTests extends FloodlightTestCase {
 			Assert.assertEquals(exampleFlowName, testMap.get("name"));
 			Assert.assertEquals(exampleCookieBool, testMap.get("cookie"));
 			Assert.assertEquals(examplePrio, testMap.get("priority"));
-			Assert.assertEquals(exampleIngressPort, testMap.get("ingress-port"));
-			Assert.assertEquals(exampleActions, testMap.get("actions"));
+			Assert.assertEquals(exampleIngressPort,
+					Integer.parseInt(testMap.get("ingress-port")));
+			Assert.assertEquals(exampleOutPort,
+					Integer.parseInt(testMap.get("actions")));
 		} catch (IOException e) {
 			Assert.fail(e.toString());
 		}
-
 	}
 }
