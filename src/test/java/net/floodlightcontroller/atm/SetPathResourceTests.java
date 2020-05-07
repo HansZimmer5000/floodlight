@@ -141,11 +141,11 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	@Test
 	public void whenSerializeAndDeserializeUsingJackson_thenCorrect() 
 	  throws IOException{
-	    Request foo = new Request(1,"first");
+	    FlowModsDTO foo = new FlowModsDTO(1,"first");
 	    ObjectMapper mapper = new ObjectMapper();
 
 	    String jsonStr = mapper.writeValueAsString(foo);
-	    Request result = mapper.readValue(jsonStr, new TypeReference<Request>() {});
+	    FlowModsDTO result = mapper.readValue(jsonStr, new TypeReference<FlowModsDTO>() {});
 	    Assert.assertEquals(foo.id,result.id);
 	}
 }
