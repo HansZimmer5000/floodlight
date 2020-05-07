@@ -19,7 +19,7 @@ public class ATMRoutable implements RestletRoutable {
 	public Restlet getRestlet(Context context) {
         Router router = new Router(context);
         
-        router.attach("/path", SetPathResource.class);
+        router.attach("/flows", SetPathResource.class);
         
         return router;
 	}
