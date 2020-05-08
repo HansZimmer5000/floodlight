@@ -1,22 +1,27 @@
 package net.floodlightcontroller.atm;
 
-import java.io.IOException;
-import java.nio.BufferOverflowException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Random;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.replay;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;
+import org.projectfloodlight.openflow.protocol.OFFactories;
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
+import org.projectfloodlight.openflow.protocol.OFVersion;
+import org.projectfloodlight.openflow.protocol.action.OFAction;
+import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
+import org.projectfloodlight.openflow.protocol.ver14.OFFactoryVer14;
+import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
+import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.test.FloodlightTestCase;
 
 public class SetPathResourceTests extends FloodlightTestCase {
@@ -37,9 +42,13 @@ public class SetPathResourceTests extends FloodlightTestCase {
 			+ "\",\n" + "\"inPort\": \"" + String.valueOf(exampleInPort)
 			+ "\",\n" + "\"outPort\":      \"" + String.valueOf(exampleOutPort)
 			+ "\"\n" + "";
+	private static FlowModDTO testDTO1 = new FlowModDTO("ab", "testName", 0, 1);
+	private static FlowModDTO testDTO2 = new FlowModDTO("ab:cd", "testName", 1,
+			6);
 
 	@Override
 	public void setUp() throws Exception {
+		super.setUp();
 		this.setPathResource = new SetPathResource();
 	}
 
@@ -80,7 +89,42 @@ public class SetPathResourceTests extends FloodlightTestCase {
 
 	@Test
 	public void whenGetAffectedSwitches_thenCorrect() {
-		Assert.fail("NOT IMPLEMENTED YET!");
+		mockSwitchManager = getMockSwitchService();
+		Assert.assertNotNull(mockSwitchManager);
+		System.out.println("..");
+
+		// Mock switches
+		DatapathId dpid1 = DatapathId.of(testDTO1.dpid);
+		IOFSwitch sw1 = EasyMock.createNiceMock(IOFSwitch.class);
+		expect(sw1.getId()).andReturn(dpid1).anyTimes();
+		expect(sw1.getOFFactory()).andReturn(
+				OFFactories.getFactory(OFVersion.OF_13)).anyTimes();
+		replay(sw1);
+
+		DatapathId dpid2 = DatapathId.of(testDTO2.dpid);
+		IOFSwitch sw2 = EasyMock.createNiceMock(IOFSwitch.class);
+		expect(sw2.getId()).andReturn(dpid2).anyTimes();
+		expect(sw2.getOFFactory()).andReturn(
+				OFFactories.getFactory(OFVersion.OF_13)).anyTimes();
+		replay(sw2);
+
+		Map<DatapathId, IOFSwitch> switches = new HashMap<>();
+		switches.put(dpid1, sw1);
+		switches.put(dpid2, sw2);
+		mockSwitchManager.setSwitches(switches);
+
+		ArrayList<FlowModDTO> flowModDTOs = new ArrayList<>();
+		flowModDTOs.add(testDTO1);
+		flowModDTOs.add(testDTO2);
+
+		ArrayList<IOFSwitch> returnedSwitches = this.setPathResource
+				.getAffectedSwitches(mockSwitchManager, flowModDTOs);
+
+		Assert.assertEquals(2, returnedSwitches.size());
+		Assert.assertEquals("00:00:00:00:00:00:00:" + testDTO1.dpid,
+				returnedSwitches.get(0).getId().toString());
+		Assert.assertEquals("00:00:00:00:00:00:" + testDTO2.dpid,
+				returnedSwitches.get(1).getId().toString());
 	}
 
 	@Test
@@ -93,9 +137,44 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		Assert.fail("NOT IMPLEMENTED YET");
 	}
 
+	private void equalsOFFlowAdd(OFFlowAdd testMod1, int inPort, int outPort,
+			long updateID) {
+		Assert.assertEquals("OF_14", testMod1.getVersion().toString());
+		Assert.assertEquals(outPort, testMod1.getOutPort().getPortNumber());
+		Assert.assertEquals(updateID, testMod1.getXid());
+		Assert.assertEquals("ADD", testMod1.getCommand().toString());
+
+		// Test Instructions (Actions)
+		Assert.assertEquals(1, testMod1.getInstructions().size());
+		Assert.assertTrue(testMod1.getInstructions().get(0).toString()
+				.indexOf("port=" + String.valueOf(outPort)) > 0);
+
+		// Test Match
+		Assert.assertEquals(inPort, testMod1.getMatch().get(MatchField.IN_PORT)
+				.getPortNumber());
+		Assert.assertEquals(EthType.IPv4,
+				testMod1.getMatch().get(MatchField.ETH_TYPE));
+
+	}
+
 	@Test
 	public void whenCreateFlowMods_thenCorrect() throws Exception {
-		Assert.fail("NOT IMPLEMENTED YET");
+		byte atmID = UpdateID.createNewATMID();
+		UpdateID updateID = new UpdateID(atmID);
+
+		ArrayList<FlowModDTO> flowModDTOs = new ArrayList<>();
+		flowModDTOs.add(testDTO1);
+		flowModDTOs.add(testDTO2);
+
+		List<OFFlowAdd> result = this.setPathResource.createFlowMods(
+				flowModDTOs, updateID);
+
+		Assert.assertEquals(2, result.size());
+
+		equalsOFFlowAdd(result.get(0), testDTO1.inPort, testDTO1.outPort,
+				updateID.toLong());
+		equalsOFFlowAdd(result.get(1), testDTO2.inPort, testDTO2.outPort,
+				updateID.toLong());
 	}
 
 	@Test
@@ -110,21 +189,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 
 		OFFlowAdd testMod1 = this.setPathResource.createFlowMod(testDTO, xid);
 
-		Assert.assertEquals("OF_14", testMod1.getVersion().toString());
-		Assert.assertEquals(testDTO.outPort, testMod1.getOutPort()
-				.getPortNumber());
-		Assert.assertEquals(16, testMod1.getXid());
-		Assert.assertEquals("ADD", testMod1.getCommand().toString());
-
-		// Test Instructions (Actions)
-		Assert.assertEquals(1, testMod1.getInstructions().size());
-		Assert.assertTrue(testMod1.getInstructions().get(0).toString()
-				.indexOf("port=" + String.valueOf(testDTO.outPort)) > 0);
-
-		Assert.assertEquals(testDTO.inPort,
-				testMod1.getMatch().get(MatchField.IN_PORT).getPortNumber());
-		Assert.assertEquals(EthType.IPv4,
-				testMod1.getMatch().get(MatchField.ETH_TYPE));
+		equalsOFFlowAdd(testMod1, testDTO.inPort, testDTO.outPort, xid);
 	}
 
 	@Test
@@ -170,49 +235,27 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	}
 
 	@Test
-	public void whenSerializeAndDeserializeUsingJackson_thenCorrect()
-			throws IOException {
-		FlowModDTO flowMod1 = new FlowModDTO();
-		flowMod1.dpid = "testDPID";
-		flowMod1.name = "Flow1";
-		flowMod1.inPort = 0;
-		flowMod1.outPort = 1;
-
-		FlowModDTO flowMod2 = new FlowModDTO();
-		flowMod2.dpid = "testDPID2";
-		flowMod2.name = "Flow1";
-		flowMod2.inPort = 3;
-		flowMod2.outPort = 1;
-
-		ArrayList<FlowModDTO> flowMods = new ArrayList<>();
-		flowMods.add(flowMod1);
-		flowMods.add(flowMod2);
-
-		ObjectMapper mapper = new ObjectMapper();
-		String jsonStr = mapper.writeValueAsString(flowMods);
-		String expectedStr = "[{\"dpid\":\"testDPID\",\"name\":\"Flow1\",\"inPort\":0,\"outPort\":1},{\"dpid\":\"testDPID2\",\"name\":\"Flow1\",\"inPort\":3,\"outPort\":1}]";
-		Assert.assertEquals(expectedStr, jsonStr);
-
-		ArrayList<FlowModDTO> result = mapper.readValue(jsonStr,
-				new TypeReference<ArrayList<FlowModDTO>>() {
-				});
-		Assert.assertEquals(flowMods.size(), result.size());
-
-		for (int i = 0; i < 2; i++) {
-			FlowModDTO currentResult = result.get(i);
-			FlowModDTO currentOriginal = flowMods.get(i);
-
-			Assert.assertTrue(currentOriginal.equals(currentResult));
-		}
-	}
-
-	@Test
 	public void whenCreateActions_thenCorrect() {
-		Assert.fail("NOT IMPLEMENTED YET!");
+		OFFactoryVer14 testFactory = new OFFactoryVer14();
+		int outPort = 49;
+
+		List<OFAction> actions = this.setPathResource.createActions(
+				testFactory, outPort);
+		// Test Instructions (Actions)
+		Assert.assertEquals(1, actions.size());
+		Assert.assertTrue(actions.get(0).toString()
+				.indexOf("port=" + String.valueOf(outPort)) > 0);
 	}
 
 	@Test
-	public void whenCreateMath_thenCorrect() {
-		Assert.fail("NOT IMPLEMENTED YET!");
+	public void whenCreateMatch_thenCorrect() {
+		OFFactoryVer14 testFactory = new OFFactoryVer14();
+		int inPort = 49;
+
+		Match match = this.setPathResource.createMatch(testFactory, inPort);
+
+		Assert.assertEquals(inPort, match.get(MatchField.IN_PORT)
+				.getPortNumber());
+		Assert.assertEquals(EthType.IPv4, match.get(MatchField.ETH_TYPE));
 	}
 }

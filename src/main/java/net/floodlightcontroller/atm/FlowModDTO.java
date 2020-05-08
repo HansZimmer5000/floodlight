@@ -12,6 +12,13 @@ public class FlowModDTO {
 	public FlowModDTO() {
 	}
 	
+	public FlowModDTO(String dpid, String name, int inPort, int outPort){
+		this.dpid = dpid;
+		this.name = name;
+		this.inPort = inPort;
+		this.outPort = outPort;
+	}
+	
 	public String toString(){
 		String format = "FlowMod: dpid({1}) name({2}) inPort({3}) outPort({4})";
 		Object[] args = {this.dpid, this.name, this.inPort, this.outPort};
