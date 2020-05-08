@@ -34,8 +34,6 @@ public class SetPathResource extends ServerResource {
 	public String SetPath(String jsonBody) {
 		log.debug("SetPathReceived:" + jsonBody);
 
-		// TODO 418 = new Status(418);
-
 		Status status;
 		String message = "";
 

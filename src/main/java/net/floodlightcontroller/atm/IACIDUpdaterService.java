@@ -11,7 +11,7 @@ import net.floodlightcontroller.core.internal.IOFSwitchService;
 import net.floodlightcontroller.core.module.IFloodlightService;
 
 public interface IACIDUpdaterService extends IFloodlightService, IOFMessageListener {
-	
+	//TODO maybe this needs a rename since it doesn do the full update itself and it rather a holder for the receiving messages and communicator to the switches.
 	public UpdateID createNewUpdateIDAndPrepareMessages();
 	
 	public List<MessagePair> getMessages(UpdateID updateID);
