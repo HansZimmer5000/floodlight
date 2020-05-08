@@ -45,11 +45,38 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	private static FlowModDTO testDTO1 = new FlowModDTO("ab", "testName", 0, 1);
 	private static FlowModDTO testDTO2 = new FlowModDTO("ab:cd", "testName", 1,
 			6);
+	private static IOFSwitch sw1;
+	private static IOFSwitch sw2;
 
 	@Override
 	public void setUp() throws Exception {
 		super.setUp();
 		this.setPathResource = new SetPathResource();
+		
+		mockSwitchManager = getMockSwitchService();
+		Assert.assertNotNull(mockSwitchManager);
+		
+		// Mock switches
+		DatapathId dpid1 = DatapathId.of(testDTO1.dpid);
+		IOFSwitch sw1 = EasyMock.createNiceMock(IOFSwitch.class);
+		expect(sw1.getId()).andReturn(dpid1).anyTimes();
+		expect(sw1.getOFFactory()).andReturn(
+				OFFactories.getFactory(OFVersion.OF_13)).anyTimes();
+		replay(sw1);
+		this.sw1 = sw1;
+
+		DatapathId dpid2 = DatapathId.of(testDTO2.dpid);
+		IOFSwitch sw2 = EasyMock.createNiceMock(IOFSwitch.class);
+		expect(sw2.getId()).andReturn(dpid2).anyTimes();
+		expect(sw2.getOFFactory()).andReturn(
+				OFFactories.getFactory(OFVersion.OF_13)).anyTimes();
+		replay(sw2);
+		this.sw2 = sw2;
+
+		Map<DatapathId, IOFSwitch> switches = new HashMap<>();
+		switches.put(dpid1, sw1);
+		switches.put(dpid2, sw2);
+		mockSwitchManager.setSwitches(switches);
 	}
 
 	@Test
@@ -88,42 +115,44 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	}
 
 	@Test
-	public void whenGetAffectedSwitches_thenCorrect() {
+	public void whenGetSwitchesAndFlowMods_thenCorrct() {
 		mockSwitchManager = getMockSwitchService();
 		Assert.assertNotNull(mockSwitchManager);
 
-		// Mock switches
-		DatapathId dpid1 = DatapathId.of(testDTO1.dpid);
-		IOFSwitch sw1 = EasyMock.createNiceMock(IOFSwitch.class);
-		expect(sw1.getId()).andReturn(dpid1).anyTimes();
-		expect(sw1.getOFFactory()).andReturn(
-				OFFactories.getFactory(OFVersion.OF_13)).anyTimes();
-		replay(sw1);
-
-		DatapathId dpid2 = DatapathId.of(testDTO2.dpid);
-		IOFSwitch sw2 = EasyMock.createNiceMock(IOFSwitch.class);
-		expect(sw2.getId()).andReturn(dpid2).anyTimes();
-		expect(sw2.getOFFactory()).andReturn(
-				OFFactories.getFactory(OFVersion.OF_13)).anyTimes();
-		replay(sw2);
-
-		Map<DatapathId, IOFSwitch> switches = new HashMap<>();
-		switches.put(dpid1, sw1);
-		switches.put(dpid2, sw2);
-		mockSwitchManager.setSwitches(switches);
+		byte atmID = UpdateID.createNewATMID();
+		UpdateID updateID = new UpdateID(atmID);
 
 		ArrayList<FlowModDTO> flowModDTOs = new ArrayList<>();
 		flowModDTOs.add(testDTO1);
 		flowModDTOs.add(testDTO2);
 
-		ArrayList<IOFSwitch> returnedSwitches = this.setPathResource
-				.getAffectedSwitches(mockSwitchManager, flowModDTOs);
+		Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods = this.setPathResource
+				.getSwitchesAndFlowMods(mockSwitchManager, flowModDTOs,
+						updateID);
 
-		Assert.assertEquals(2, returnedSwitches.size());
-		Assert.assertEquals("00:00:00:00:00:00:00:" + testDTO1.dpid,
-				returnedSwitches.get(0).getId().toString());
-		Assert.assertEquals("00:00:00:00:00:00:" + testDTO2.dpid,
-				returnedSwitches.get(1).getId().toString());
+		Assert.assertEquals(2, switchesAndFlowMods.size());
+		Assert.assertTrue(switchesAndFlowMods.keySet().contains(this.sw1));
+		Assert.assertTrue(switchesAndFlowMods.keySet().contains(this.sw2));
+		
+		equalsOFFlowAdd(switchesAndFlowMods.get(this.sw1), testDTO1.inPort, testDTO1.outPort,
+				updateID.toLong());
+		equalsOFFlowAdd(switchesAndFlowMods.get(this.sw2), testDTO2.inPort, testDTO2.outPort,
+				updateID.toLong());
+	}
+
+	@Test
+	public void whenGetAffectedSwitch_thenCorrect() {
+		ArrayList<FlowModDTO> flowModDTOs = new ArrayList<>();
+		flowModDTOs.add(testDTO1);
+		flowModDTOs.add(testDTO2);
+		
+		IOFSwitch testSwitch;
+
+		testSwitch = this.setPathResource.getAffectedSwitch(mockSwitchManager, testDTO1);
+		Assert.assertEquals("00:00:00:00:00:00:00:" + testDTO1.dpid, testSwitch.getId().toString());
+		
+		testSwitch = this.setPathResource.getAffectedSwitch(mockSwitchManager, testDTO2);
+		Assert.assertEquals("00:00:00:00:00:00:" + testDTO2.dpid, testSwitch.getId().toString());
 	}
 
 	@Test
@@ -154,26 +183,6 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		Assert.assertEquals(EthType.IPv4,
 				testMod1.getMatch().get(MatchField.ETH_TYPE));
 
-	}
-
-	@Test
-	public void whenCreateFlowMods_thenCorrect() throws Exception {
-		byte atmID = UpdateID.createNewATMID();
-		UpdateID updateID = new UpdateID(atmID);
-
-		ArrayList<FlowModDTO> flowModDTOs = new ArrayList<>();
-		flowModDTOs.add(testDTO1);
-		flowModDTOs.add(testDTO2);
-
-		List<OFFlowAdd> result = this.setPathResource.createFlowMods(
-				flowModDTOs, updateID);
-
-		Assert.assertEquals(2, result.size());
-
-		equalsOFFlowAdd(result.get(0), testDTO1.inPort, testDTO1.outPort,
-				updateID.toLong());
-		equalsOFFlowAdd(result.get(1), testDTO2.inPort, testDTO2.outPort,
-				updateID.toLong());
 	}
 
 	@Test

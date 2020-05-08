@@ -1,6 +1,7 @@
 package net.floodlightcontroller.atm;
 
 import java.util.List;
+import java.util.Map;
 
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
 import org.projectfloodlight.openflow.protocol.OFMessage;
@@ -16,7 +17,7 @@ public interface IACIDUpdaterService extends IFloodlightService, IOFMessageListe
 	
 	public List<MessagePair> getMessages(UpdateID updateID);
 	
-	public void voteLock(List<IOFSwitch> switches, List<OFFlowAdd> flowMods);
+	public void voteLock(Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods);
 	
 	public void rollback(List<IOFSwitch> switches);
 	

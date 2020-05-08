@@ -1,7 +1,9 @@
 package net.floodlightcontroller.atm;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
@@ -50,13 +52,14 @@ public class SetPathResource extends ServerResource {
 
 		// Prepare Update
 		UpdateID updateID = updateService.createNewUpdateIDAndPrepareMessages();
-		List<OFFlowAdd> flowMods = createFlowMods(flowModDTOs, updateID);
-		if (flowMods != null) {
+		Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods = getSwitchesAndFlowMods(
+				switchService, flowModDTOs, updateID);
+
+		if (switchesAndFlowMods != null) {
 			status = getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
-					switchService, updateService, flowModDTOs, flowMods,
-					updateID);
+					switchService, updateService, switchesAndFlowMods, updateID);
 		} else {
-			log.debug("FlowMods could not be created");
+			log.debug("FlowMods could not be created fully");
 			status = Status.CLIENT_ERROR_BAD_REQUEST;
 		}
 
@@ -67,17 +70,17 @@ public class SetPathResource extends ServerResource {
 
 	public Status getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
 			IOFSwitchService switchService, IACIDUpdaterService updateService,
-			ArrayList<FlowModDTO> flowModDTOs, List<OFFlowAdd> flowMods,
-			UpdateID updateID) {
+			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods, UpdateID updateID) {
 		Status status;
-		ArrayList<IOFSwitch> affectedSwitches = getAffectedSwitches(
-				switchService, flowModDTOs);
-		if (flowModDTOs.size() == affectedSwitches.size()) {
+		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>(
+				switchesAndFlowMods.keySet());
 
-			status = getMessagesAndUpdateNetwork(updateService, flowMods,
-					affectedSwitches, updateID);
+		if (switchesAndFlowMods.size() == affectedSwitches.size()) {
+
+			status = getMessagesAndUpdateNetwork(updateService,
+					switchesAndFlowMods, affectedSwitches, updateID);
 		} else {
-			log.debug("Could not find all switches");
+			log.debug("Could not find all switches or there are duplicates");
 			status = Status.CLIENT_ERROR_NOT_FOUND;
 		}
 
@@ -85,14 +88,16 @@ public class SetPathResource extends ServerResource {
 	}
 
 	public Status getMessagesAndUpdateNetwork(
-			IACIDUpdaterService updateService, List<OFFlowAdd> flowMods,
+			IACIDUpdaterService updateService,
+			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods,
 			ArrayList<IOFSwitch> affectedSwitches, UpdateID updateID) {
 		Status status;
 		List<MessagePair> messages = updateService.getMessages(updateID);
 		if (messages != null) {
 
 			// Update
-			updateNetwork(updateService, flowMods, affectedSwitches, messages);
+			updateNetwork(updateService, switchesAndFlowMods, affectedSwitches,
+					messages);
 			status = Status.SUCCESS_NO_CONTENT;
 		} else {
 			log.debug("Messages was null");
@@ -103,13 +108,14 @@ public class SetPathResource extends ServerResource {
 	}
 
 	public void updateNetwork(IACIDUpdaterService updateService,
-			List<OFFlowAdd> flowMods, ArrayList<IOFSwitch> affectedSwitches,
-			List<MessagePair> messages) {
+			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods,
+			ArrayList<IOFSwitch> affectedSwitches, List<MessagePair> messages) {
 
 		try {
 			// Vote Lock and wait for commits
 			List<IOFSwitch> unconfirmedSwitches = executeFirstPhase(
-					updateService, affectedSwitches, flowMods, messages);
+					updateService, affectedSwitches, switchesAndFlowMods,
+					messages);
 
 			// Rollback where necessary
 			executeSecondPhase(updateService, affectedSwitches,
@@ -136,9 +142,10 @@ public class SetPathResource extends ServerResource {
 	}
 
 	public List<IOFSwitch> executeFirstPhase(IACIDUpdaterService updateService,
-			List<IOFSwitch> affectedSwitches, List<OFFlowAdd> flowMods,
+			List<IOFSwitch> affectedSwitches,
+			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods,
 			List<MessagePair> messages) throws InterruptedException {
-		updateService.voteLock(affectedSwitches, flowMods);
+		updateService.voteLock(switchesAndFlowMods);
 		Thread.sleep(ASP_TIMEOUT_MS);
 
 		List<IOFSwitch> unconfirmedSwitches = getUnconfirmedSwitches(messages,
@@ -150,10 +157,10 @@ public class SetPathResource extends ServerResource {
 			List<IOFSwitch> affectedSwitches,
 			List<IOFSwitch> unconfirmedSwitches) {
 		if (unconfirmedSwitches.size() > 0) {
-			
+
 			List<IOFSwitch> readySwitches = new ArrayList<>(affectedSwitches);
 			readySwitches.removeAll(unconfirmedSwitches);
-			
+
 			updateService.rollback(readySwitches);
 		}
 	}
@@ -170,17 +177,35 @@ public class SetPathResource extends ServerResource {
 		return unfinishedSwitches;
 	}
 
-	public ArrayList<IOFSwitch> getAffectedSwitches(
-			IOFSwitchService switchService, List<FlowModDTO> flowModDTOs) {
-		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
+	public IOFSwitch getAffectedSwitch(
+			IOFSwitchService switchService, FlowModDTO flowModDTO) {
+
+		DatapathId dpid = DatapathId.of(flowModDTO.dpid);
+		IOFSwitch affectedSwitch = switchService.getSwitch(dpid);
+
+		return affectedSwitch;
+	}
+
+	public Map<IOFSwitch, OFFlowAdd> getSwitchesAndFlowMods(
+			IOFSwitchService switchService, ArrayList<FlowModDTO> flowModDTOs,
+			UpdateID updateID) {
+		Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods = new HashMap<>();
+		IOFSwitch currentSwitch;
+		OFFlowAdd currentFlowMod;
+		long xid = updateID.toLong();
 
 		for (FlowModDTO currentFlowModDTO : flowModDTOs) {
-			DatapathId dpid = DatapathId.of(currentFlowModDTO.dpid);
-			IOFSwitch currentSwitch = switchService.getSwitch(dpid);
-			affectedSwitches.add(currentSwitch);
+			currentSwitch = getAffectedSwitch(switchService, currentFlowModDTO);
+			currentFlowMod = createFlowMod(currentFlowModDTO, xid);
+			
+			if (currentFlowMod == null || currentSwitch == null) {
+				return null;
+			} 
+			
+			switchesAndFlowMods.put(currentSwitch, currentFlowMod);
 		}
 
-		return affectedSwitches;
+		return switchesAndFlowMods;
 	}
 
 	public List<IOFSwitch> getUnfinishedSwitches(List<MessagePair> messages,
@@ -217,26 +242,6 @@ public class SetPathResource extends ServerResource {
 		}
 
 		return unconfirmedSwitches;
-	}
-
-	public List<OFFlowAdd> createFlowMods(ArrayList<FlowModDTO> flowModDTOs,
-			UpdateID updateID) {
-
-		List<OFFlowAdd> result = new ArrayList<>();
-		OFFlowAdd newFlowMod;
-
-		long xid = updateID.toLong();
-
-		for (FlowModDTO currentFlowModDTO : flowModDTOs) {
-			newFlowMod = createFlowMod(currentFlowModDTO, xid);
-			if (newFlowMod == null) {
-				return null;
-			} else {
-				result.add(newFlowMod);
-			}
-		}
-
-		return result;
 	}
 
 	// Create a Flowmod that someone has to write to a switch with:

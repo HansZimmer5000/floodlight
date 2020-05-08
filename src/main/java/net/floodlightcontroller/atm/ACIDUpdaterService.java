@@ -59,7 +59,7 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 	}
 
 	@Override
-	public void voteLock(List<IOFSwitch> switches, List<OFFlowAdd> flowMods) {
+	public void voteLock(Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods) {
 		// TODO Auto-generated method stub
 		
 	}
