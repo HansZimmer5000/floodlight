@@ -51,7 +51,7 @@ public class SetPathResource extends ServerResource {
 		ArrayList<FlowModDTO> flowModDTOs = convertJsonToDTO(jsonBody);
 
 		// Prepare Update
-		Byte[] updateID = updateService.createNewUpdateIDAndPrepareMessages();
+		byte[] updateID = updateService.createNewUpdateIDAndPrepareMessages();
 		List<OFFlowAdd> flowMods = createFlowMods(flowModDTOs, updateID);
 		if (flowMods != null) {
 			status = getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
@@ -70,7 +70,7 @@ public class SetPathResource extends ServerResource {
 	public Status getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
 			IOFSwitchService switchService, IACIDUpdaterService updateService,
 			ArrayList<FlowModDTO> flowModDTOs, List<OFFlowAdd> flowMods,
-			Byte[] updateID) {
+			byte[] updateID) {
 		Status status;
 		ArrayList<IOFSwitch> affectedSwitches = getAffectedSwitches(
 				switchService, flowModDTOs);
@@ -88,7 +88,7 @@ public class SetPathResource extends ServerResource {
 
 	public Status getMessagesAndUpdateNetwork(
 			IACIDUpdaterService updateService, List<OFFlowAdd> flowMods,
-			ArrayList<IOFSwitch> affectedSwitches, Byte[] updateID) {
+			ArrayList<IOFSwitch> affectedSwitches, byte[] updateID) {
 		Status status;
 		List<MessagePair> messages = updateService.getMessages(updateID);
 		if (messages != null) {
@@ -226,7 +226,7 @@ public class SetPathResource extends ServerResource {
 	}
 
 	public List<OFFlowAdd> createFlowMods(ArrayList<FlowModDTO> flowModDTOs,
-			Byte[] updateID) {
+			byte[] updateID) {
 
 		List<OFFlowAdd> result = new ArrayList<>();
 		OFFlowAdd newFlowMod;
@@ -274,11 +274,12 @@ public class SetPathResource extends ServerResource {
 		}
 	}
 
-	public long convertByteArrToLong(Byte[] bytes) {
+	public long convertByteArrToLong(byte[] bytes) {
 		long result = 0;
 		for (int i = 0; i < bytes.length; i++) {
 			result = result << 8;
-			result += bytes[i];
+			byte tmpVal = bytes[i];			
+			result += tmpVal;
 		}
 		return result;
 	}

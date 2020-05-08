@@ -12,9 +12,9 @@ import net.floodlightcontroller.core.module.IFloodlightService;
 
 public interface IACIDUpdaterService extends IFloodlightService, IOFMessageListener {
 	
-	public Byte[] createNewUpdateIDAndPrepareMessages();
+	public byte[] createNewUpdateIDAndPrepareMessages();
 	
-	public List<MessagePair> getMessages(Byte[] updateID);
+	public List<MessagePair> getMessages(byte[] updateID);
 	
 	public void voteLock(List<IOFSwitch> switches, List<OFFlowAdd> flowMods);
 	

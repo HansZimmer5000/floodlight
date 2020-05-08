@@ -14,12 +14,12 @@ import net.floodlightcontroller.core.IOFSwitch;
 
 public class ACIDUpdaterService implements IACIDUpdaterService {
 
-	Map<Byte[], List<MessagePair>> messages;
-	Byte atmID;
+	Map<byte[], List<MessagePair>> messages;
+	byte atmID;
 
 	public ACIDUpdaterService() {
 		messages = new HashMap<>();
-		this.atmID = getRandomByte();
+		this.atmID = UpdateID.createNewATMID();
 	}
 
 	@Override
@@ -45,15 +45,15 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 
 		// TODO simple, in the future extract XID and put each message according
 		// to its xid in specific Lists
-		Byte[] simpleTestXid = new Byte[]{49};
+		byte[] simpleTestUpdateID = new UpdateID(3).toArr();
 		MessagePair newPair = new MessagePair(sw, msg);
 		
-		List<MessagePair> currentList = this.messages.get(simpleTestXid);
+		List<MessagePair> currentList = this.messages.get(simpleTestUpdateID);
 		if (currentList == null) {
 			currentList = new ArrayList<>();
 		}
 		currentList.add(newPair);
-		this.messages.put(simpleTestXid, currentList);
+		this.messages.put(simpleTestUpdateID, currentList);
 		
 		return Command.CONTINUE;
 	}
@@ -77,26 +77,16 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 	}
 
 	@Override
-	public Byte[] createNewUpdateIDAndPrepareMessages() {
-		Byte[] updateID = new Byte[4];
-		
-		updateID[0] = this.atmID;
-		updateID[1] = getRandomByte();
-		updateID[2] = getRandomByte();
-		updateID[3] = getRandomByte();
+	public byte[] createNewUpdateIDAndPrepareMessages() {
+		byte[] updateID = new UpdateID(this.atmID).toArr();
 		
 		this.messages.put(updateID, new ArrayList<MessagePair>());
 
 		return updateID;
 	}
-	
-	private Byte getRandomByte(){
-		Double randomDbl = Math.random() % 256;
-		return randomDbl.byteValue();
-	}
 
 	@Override
-	public List<MessagePair> getMessages(Byte[] updateID) {
+	public List<MessagePair> getMessages(byte[] updateID) {
 		List<MessagePair> result = this.messages.get(updateID);
 		return result;
 	}

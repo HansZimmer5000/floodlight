@@ -1,9 +1,12 @@
 package net.floodlightcontroller.atm;
 
 import java.io.IOException;
+import java.nio.BufferOverflowException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Random;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -41,33 +44,58 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	}
 
 	@Test
-	public void testgetUnfinishedSwitches() throws Exception {
-
+	public void whenSetPath_thenCorrect() throws Exception {
+		Assert.fail("NOT IMPLEMENTED YET");
 	}
 
 	@Test
-	public void testgetUnconfirmedSwitches() throws Exception {
-
+	public void whenGetAffectedSwitchesAndGetMessagesAndUpdateNetwork_thenCorrect() {
+		Assert.fail("NOT IMPLEMENTED YET!");
 	}
 
 	@Test
-	public void testSetPath() throws Exception {
-
+	public void whenGetMessagesAndUpdateNetwork_thenCorrect() {
+		Assert.fail("NOT IMPLEMENTED YET!");
 	}
 
 	@Test
-	public void testextractSwitches() throws Exception {
-
+	public void whenUpdateNetwork_thenCorrect() {
+		Assert.fail("NOT IMPLEMENTED YET!");
 	}
 
 	@Test
-	public void testgextractHosts() throws Exception {
-
+	public void whenExecuteFirstPhase_thenCorrect() {
+		Assert.fail("NOT IMPLEMENTED YET!");
 	}
 
 	@Test
-	public void testcreateFlowMods() throws Exception {
+	public void whenExecuteSecondPhase_thenCorrect() {
+		Assert.fail("NOT IMPLEMENTED YET!");
+	}
 
+	@Test
+	public void whenExecuteThirdPhase_thenCorrect() {
+		Assert.fail("NOT IMPLEMENTED YET!");
+	}
+
+	@Test
+	public void whenGetAffectedSwitches_thenCorrect() {
+		Assert.fail("NOT IMPLEMENTED YET!");
+	}
+
+	@Test
+	public void whenGetUnfinishedSwitches_thenCorrect() throws Exception {
+		Assert.fail("NOT IMPLEMENTED YET");
+	}
+
+	@Test
+	public void whenGetUnconfirmedSwitches_thenCorrect() throws Exception {
+		Assert.fail("NOT IMPLEMENTED YET");
+	}
+
+	@Test
+	public void whenCreateFlowMods_thenCorrect() throws Exception {
+		Assert.fail("NOT IMPLEMENTED YET");
 	}
 
 	@Test
@@ -128,14 +156,16 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	@Test
 	public void whenConvertJsonToMap_thenFail1() {
 
-		ArrayList<FlowModDTO> flowMods = this.setPathResource.convertJsonToDTO(exampleWrongFormatJson);
+		ArrayList<FlowModDTO> flowMods = this.setPathResource
+				.convertJsonToDTO(exampleWrongFormatJson);
 		Assert.assertEquals(0, flowMods.size());
 	}
-	
+
 	@Test
 	public void whenConvertJsonToMap_thenFail2() {
 
-		ArrayList<FlowModDTO> flowMods = this.setPathResource.convertJsonToDTO(exampleEmptyJson);
+		ArrayList<FlowModDTO> flowMods = this.setPathResource
+				.convertJsonToDTO(exampleEmptyJson);
 		Assert.assertEquals(0, flowMods.size());
 	}
 
@@ -174,5 +204,25 @@ public class SetPathResourceTests extends FloodlightTestCase {
 
 			Assert.assertTrue(currentOriginal.equals(currentResult));
 		}
+	}
+
+	@Test
+	public void whenConvertByteArrToLong_thenCorrect() {
+		byte[] arr = new byte[4];
+		arr[3] = new Integer(17).byteValue();
+
+		long result = this.setPathResource.convertByteArrToLong(arr);
+		
+		Assert.assertEquals(17, result);
+	}
+
+	@Test
+	public void whenCreateActions_thenCorrect() {
+		Assert.fail("NOT IMPLEMENTED YET!");
+	}
+
+	@Test
+	public void whenCreateMath_thenCorrect() {
+		Assert.fail("NOT IMPLEMENTED YET!");
 	}
 }
