@@ -14,7 +14,7 @@ import net.floodlightcontroller.core.IOFSwitch;
 
 public class ACIDUpdaterService implements IACIDUpdaterService {
 
-	Map<byte[], List<MessagePair>> messages;
+	Map<UpdateID, List<MessagePair>> messages;
 	byte atmID;
 
 	public ACIDUpdaterService() {
@@ -45,7 +45,7 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 
 		// TODO simple, in the future extract XID and put each message according
 		// to its xid in specific Lists
-		byte[] simpleTestUpdateID = new UpdateID(3).toArr();
+		UpdateID simpleTestUpdateID = new UpdateID(3);
 		MessagePair newPair = new MessagePair(sw, msg);
 		
 		List<MessagePair> currentList = this.messages.get(simpleTestUpdateID);
@@ -77,8 +77,8 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 	}
 
 	@Override
-	public byte[] createNewUpdateIDAndPrepareMessages() {
-		byte[] updateID = new UpdateID(this.atmID).toArr();
+	public UpdateID createNewUpdateIDAndPrepareMessages() {
+		UpdateID updateID = new UpdateID(this.atmID);
 		
 		this.messages.put(updateID, new ArrayList<MessagePair>());
 
@@ -86,7 +86,7 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 	}
 
 	@Override
-	public List<MessagePair> getMessages(byte[] updateID) {
+	public List<MessagePair> getMessages(UpdateID updateID) {
 		List<MessagePair> result = this.messages.get(updateID);
 		return result;
 	}

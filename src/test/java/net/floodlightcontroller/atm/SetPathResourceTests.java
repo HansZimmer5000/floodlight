@@ -207,16 +207,6 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	}
 
 	@Test
-	public void whenConvertByteArrToLong_thenCorrect() {
-		byte[] arr = new byte[4];
-		arr[3] = new Integer(17).byteValue();
-
-		long result = this.setPathResource.convertByteArrToLong(arr);
-		
-		Assert.assertEquals(17, result);
-	}
-
-	@Test
 	public void whenCreateActions_thenCorrect() {
 		Assert.fail("NOT IMPLEMENTED YET!");
 	}

@@ -52,4 +52,20 @@ public class UpdateID {
 		String output = String.format(format, args);
 		return output;
 	}
+	
+	public long toLong() {
+		long result = 0;
+		byte[] fullArr = new byte[4];
+		fullArr[0] = atmID;
+		fullArr[1] = this.restBytes[0];
+		fullArr[2] = this.restBytes[1];
+		fullArr[3] = this.restBytes[2];
+		
+		for (int i = 0; i < fullArr.length; i++) {
+			result = result << 8;
+			byte tmpVal = fullArr[i];			
+			result += tmpVal;
+		}
+		return result;
+	}
 }

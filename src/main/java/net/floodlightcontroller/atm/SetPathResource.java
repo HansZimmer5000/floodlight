@@ -51,7 +51,7 @@ public class SetPathResource extends ServerResource {
 		ArrayList<FlowModDTO> flowModDTOs = convertJsonToDTO(jsonBody);
 
 		// Prepare Update
-		byte[] updateID = updateService.createNewUpdateIDAndPrepareMessages();
+		UpdateID updateID = updateService.createNewUpdateIDAndPrepareMessages();
 		List<OFFlowAdd> flowMods = createFlowMods(flowModDTOs, updateID);
 		if (flowMods != null) {
 			status = getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
@@ -70,7 +70,7 @@ public class SetPathResource extends ServerResource {
 	public Status getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
 			IOFSwitchService switchService, IACIDUpdaterService updateService,
 			ArrayList<FlowModDTO> flowModDTOs, List<OFFlowAdd> flowMods,
-			byte[] updateID) {
+			UpdateID updateID) {
 		Status status;
 		ArrayList<IOFSwitch> affectedSwitches = getAffectedSwitches(
 				switchService, flowModDTOs);
@@ -88,7 +88,7 @@ public class SetPathResource extends ServerResource {
 
 	public Status getMessagesAndUpdateNetwork(
 			IACIDUpdaterService updateService, List<OFFlowAdd> flowMods,
-			ArrayList<IOFSwitch> affectedSwitches, byte[] updateID) {
+			ArrayList<IOFSwitch> affectedSwitches, UpdateID updateID) {
 		Status status;
 		List<MessagePair> messages = updateService.getMessages(updateID);
 		if (messages != null) {
@@ -226,12 +226,12 @@ public class SetPathResource extends ServerResource {
 	}
 
 	public List<OFFlowAdd> createFlowMods(ArrayList<FlowModDTO> flowModDTOs,
-			byte[] updateID) {
+			UpdateID updateID) {
 
 		List<OFFlowAdd> result = new ArrayList<>();
 		OFFlowAdd newFlowMod;
 
-		long xid = convertByteArrToLong(updateID);
+		long xid = updateID.toLong();
 
 		for (FlowModDTO currentFlowModDTO : flowModDTOs) {
 			newFlowMod = createFlowMod(currentFlowModDTO, xid);
@@ -272,16 +272,6 @@ public class SetPathResource extends ServerResource {
 
 			return flow;
 		}
-	}
-
-	public long convertByteArrToLong(byte[] bytes) {
-		long result = 0;
-		for (int i = 0; i < bytes.length; i++) {
-			result = result << 8;
-			byte tmpVal = bytes[i];			
-			result += tmpVal;
-		}
-		return result;
 	}
 
 	public ArrayList<FlowModDTO> convertJsonToDTO(String json) {
