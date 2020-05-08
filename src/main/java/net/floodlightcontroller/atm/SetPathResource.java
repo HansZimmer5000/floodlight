@@ -34,8 +34,6 @@ public class SetPathResource extends ServerResource {
 	public String SetPath(String jsonBody) {
 		log.debug("SetPathReceived:" + jsonBody);
 
-		// TODO Set status and message if error occurs somehwere during
-		// execution
 		// TODO 418 = new Status(418);
 
 		Status status;
@@ -126,10 +124,15 @@ public class SetPathResource extends ServerResource {
 			if (unfinishedSwitches.size() == 0) {
 				// Everything OK
 			} else {
-				// TODO Something did not work out!
+				log.debug("Encountered " + unfinishedSwitches.size()
+						+ " unfinished Switches: "
+						+ unfinishedSwitches.toString());
 			}
 		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
+			log.debug("Encountered Interrupt during Update: " + e.getMessage());
+			e.printStackTrace();
+		} catch (Exception e) {
+			log.debug("Encountered Exception during Update: " + e.getMessage());
 			e.printStackTrace();
 		}
 	}
@@ -151,9 +154,10 @@ public class SetPathResource extends ServerResource {
 			List<IOFSwitch> affectedSwitches,
 			List<IOFSwitch> unconfirmedSwitches) {
 		if (unconfirmedSwitches.size() > 0) {
-			// TODO Calculate readySwitches (affectedSwitches -
-			// unconfirmedSwitches)
-			List<IOFSwitch> readySwitches = new ArrayList<>();
+			
+			List<IOFSwitch> readySwitches = new ArrayList<>(affectedSwitches);
+			readySwitches.removeAll(unconfirmedSwitches);
+			
 			updateService.rollback(readySwitches);
 		}
 	}
@@ -223,7 +227,6 @@ public class SetPathResource extends ServerResource {
 
 	public List<OFFlowAdd> createFlowMods(ArrayList<FlowModDTO> flowModDTOs,
 			Byte[] updateID) {
-		// TODO Create FlowMod per switch within the path
 
 		List<OFFlowAdd> result = new ArrayList<>();
 		OFFlowAdd newFlowMod;
@@ -283,7 +286,7 @@ public class SetPathResource extends ServerResource {
 	public ArrayList<FlowModDTO> convertJsonToDTO(String json) {
 		ObjectMapper mapper = new ObjectMapper();
 		ArrayList<FlowModDTO> result = new ArrayList<>();
-		
+
 		try {
 			result = mapper.readValue(json,
 					new TypeReference<ArrayList<FlowModDTO>>() {
