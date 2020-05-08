@@ -36,7 +36,7 @@ public class SetPathResource extends ServerResource {
 	public String SetPath(String jsonBody) {
 		log.debug("SetPathReceived:" + jsonBody);
 
-		Status status;
+		Status status = new Status(418);
 		String message = "";
 
 		// Get Services
@@ -56,8 +56,15 @@ public class SetPathResource extends ServerResource {
 				switchService, flowModDTOs, updateID);
 
 		if (switchesAndFlowMods != null) {
-			status = getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
-					switchService, updateService, switchesAndFlowMods, updateID);
+			if (flowModDTOs.size() == switchesAndFlowMods.size()) {
+
+				status = getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
+						switchService, updateService, switchesAndFlowMods,
+						updateID);
+			} else {
+				log.debug("FlowModDTOs size was not equal to switchesAndFlowMods. Are there duplicates in DTOs or switch dpids that are not existent?");
+				status = Status.CLIENT_ERROR_NOT_FOUND;
+			}
 		} else {
 			log.debug("FlowMods could not be created fully");
 			status = Status.CLIENT_ERROR_BAD_REQUEST;
@@ -75,14 +82,8 @@ public class SetPathResource extends ServerResource {
 		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>(
 				switchesAndFlowMods.keySet());
 
-		if (switchesAndFlowMods.size() == affectedSwitches.size()) {
-
-			status = getMessagesAndUpdateNetwork(updateService,
-					switchesAndFlowMods, affectedSwitches, updateID);
-		} else {
-			log.debug("Could not find all switches or there are duplicates");
-			status = Status.CLIENT_ERROR_NOT_FOUND;
-		}
+		status = getMessagesAndUpdateNetwork(updateService,
+				switchesAndFlowMods, affectedSwitches, updateID);
 
 		return status;
 	}
@@ -93,8 +94,8 @@ public class SetPathResource extends ServerResource {
 			ArrayList<IOFSwitch> affectedSwitches, UpdateID updateID) {
 		Status status;
 		List<MessagePair> messages = updateService.getMessages(updateID);
+		
 		if (messages != null) {
-
 			// Update
 			updateNetwork(updateService, switchesAndFlowMods, affectedSwitches,
 					messages);
@@ -177,8 +178,8 @@ public class SetPathResource extends ServerResource {
 		return unfinishedSwitches;
 	}
 
-	public IOFSwitch getAffectedSwitch(
-			IOFSwitchService switchService, FlowModDTO flowModDTO) {
+	public IOFSwitch getAffectedSwitch(IOFSwitchService switchService,
+			FlowModDTO flowModDTO) {
 
 		DatapathId dpid = DatapathId.of(flowModDTO.dpid);
 		IOFSwitch affectedSwitch = switchService.getSwitch(dpid);
@@ -197,11 +198,11 @@ public class SetPathResource extends ServerResource {
 		for (FlowModDTO currentFlowModDTO : flowModDTOs) {
 			currentSwitch = getAffectedSwitch(switchService, currentFlowModDTO);
 			currentFlowMod = createFlowMod(currentFlowModDTO, xid);
-			
+
 			if (currentFlowMod == null || currentSwitch == null) {
 				return null;
-			} 
-			
+			}
+
 			switchesAndFlowMods.put(currentSwitch, currentFlowMod);
 		}
 
