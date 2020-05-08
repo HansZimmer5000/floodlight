@@ -141,8 +141,6 @@ public class SetPathResource extends ServerResource {
 		updateService.voteLock(affectedSwitches, flowMods);
 		Thread.sleep(ASP_TIMEOUT_MS);
 
-		// TODO is variable 'messages' still up-to-date (reference) or old
-		// (copy)?
 		List<IOFSwitch> unconfirmedSwitches = getUnconfirmedSwitches(messages,
 				affectedSwitches);
 		return unconfirmedSwitches;
@@ -167,8 +165,6 @@ public class SetPathResource extends ServerResource {
 		Thread.sleep(1000); // TODO how long to wait? Or actively check
 							// whats inside messages?
 
-		// TODO is variable 'messages' still up-to-date (reference) or old
-		// (copy)?
 		List<IOFSwitch> unfinishedSwitches = getUnfinishedSwitches(messages,
 				affectedSwitches);
 		return unfinishedSwitches;
