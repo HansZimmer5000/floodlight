@@ -27,35 +27,34 @@ import net.floodlightcontroller.test.FloodlightTestCase;
 public class SetPathResourceTests extends FloodlightTestCase {
 
 	private SetPathResource setPathResource;
-	private static String exampleDPID = "AA:BB:CC:DD:EE:FF:00:11";
-	private static String exampleFlowName = "flow-mode-1";
-	private static int exampleInPort = 1;
-	private static int exampleOutPort = 2;
-	private static String exampleJson = "{\n" + "\"dpid\":       \""
-			+ exampleDPID + "\",\n" + "\"name\":         \"" + exampleFlowName
-			+ "\",\n" + "\"inPort\": 		 \"" + String.valueOf(exampleInPort)
-			+ "\",\n" + "\"outPort\":      \"" + String.valueOf(exampleOutPort)
-			+ "\"\n" + "}";
-	private static String exampleEmptyJson = "{}";
-	private static String exampleWrongFormatJson = "\n" + "\"dpid\":       \""
+	private String exampleDPID = "AA:BB:CC:DD:EE:FF:00:11";
+	private String exampleFlowName = "flow-mode-1";
+	private int exampleInPort = 1;
+	private int exampleOutPort = 2;
+	private String exampleJson = "{\n" + "\"dpid\":       \"" + exampleDPID
+			+ "\",\n" + "\"name\":         \"" + exampleFlowName + "\",\n"
+			+ "\"inPort\": 		 \"" + String.valueOf(exampleInPort) + "\",\n"
+			+ "\"outPort\":      \"" + String.valueOf(exampleOutPort) + "\"\n"
+			+ "}";
+	private String exampleEmptyJson = "{}";
+	private String exampleWrongFormatJson = "\n" + "\"dpid\":       \""
 			+ exampleDPID + "\",\n" + "\"name\":         \"" + exampleFlowName
 			+ "\",\n" + "\"inPort\": \"" + String.valueOf(exampleInPort)
 			+ "\",\n" + "\"outPort\":      \"" + String.valueOf(exampleOutPort)
 			+ "\"\n" + "";
-	private static FlowModDTO testDTO1 = new FlowModDTO("ab", "testName", 0, 1);
-	private static FlowModDTO testDTO2 = new FlowModDTO("ab:cd", "testName", 1,
-			6);
-	private static IOFSwitch sw1;
-	private static IOFSwitch sw2;
+	private FlowModDTO testDTO1 = new FlowModDTO("ab", "testName", 0, 1);
+	private FlowModDTO testDTO2 = new FlowModDTO("ab:cd", "testName", 1, 6);
+	private IOFSwitch sw1;
+	private IOFSwitch sw2;
 
 	@Override
 	public void setUp() throws Exception {
 		super.setUp();
 		this.setPathResource = new SetPathResource();
-		
+
 		mockSwitchManager = getMockSwitchService();
 		Assert.assertNotNull(mockSwitchManager);
-		
+
 		// Mock switches
 		DatapathId dpid1 = DatapathId.of(testDTO1.dpid);
 		IOFSwitch sw1 = EasyMock.createNiceMock(IOFSwitch.class);
@@ -133,11 +132,11 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		Assert.assertEquals(2, switchesAndFlowMods.size());
 		Assert.assertTrue(switchesAndFlowMods.keySet().contains(this.sw1));
 		Assert.assertTrue(switchesAndFlowMods.keySet().contains(this.sw2));
-		
-		equalsOFFlowAdd(switchesAndFlowMods.get(this.sw1), testDTO1.inPort, testDTO1.outPort,
-				updateID.toLong());
-		equalsOFFlowAdd(switchesAndFlowMods.get(this.sw2), testDTO2.inPort, testDTO2.outPort,
-				updateID.toLong());
+
+		equalsOFFlowAdd(switchesAndFlowMods.get(this.sw1), testDTO1.inPort,
+				testDTO1.outPort, updateID.toLong());
+		equalsOFFlowAdd(switchesAndFlowMods.get(this.sw2), testDTO2.inPort,
+				testDTO2.outPort, updateID.toLong());
 	}
 
 	@Test
@@ -145,14 +144,18 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		ArrayList<FlowModDTO> flowModDTOs = new ArrayList<>();
 		flowModDTOs.add(testDTO1);
 		flowModDTOs.add(testDTO2);
-		
+
 		IOFSwitch testSwitch;
 
-		testSwitch = this.setPathResource.getAffectedSwitch(mockSwitchManager, testDTO1);
-		Assert.assertEquals("00:00:00:00:00:00:00:" + testDTO1.dpid, testSwitch.getId().toString());
-		
-		testSwitch = this.setPathResource.getAffectedSwitch(mockSwitchManager, testDTO2);
-		Assert.assertEquals("00:00:00:00:00:00:" + testDTO2.dpid, testSwitch.getId().toString());
+		testSwitch = this.setPathResource.getAffectedSwitch(mockSwitchManager,
+				testDTO1);
+		Assert.assertEquals("00:00:00:00:00:00:00:" + testDTO1.dpid, testSwitch
+				.getId().toString());
+
+		testSwitch = this.setPathResource.getAffectedSwitch(mockSwitchManager,
+				testDTO2);
+		Assert.assertEquals("00:00:00:00:00:00:" + testDTO2.dpid, testSwitch
+				.getId().toString());
 	}
 
 	@Test
