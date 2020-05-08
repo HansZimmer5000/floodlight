@@ -91,7 +91,6 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	public void whenGetAffectedSwitches_thenCorrect() {
 		mockSwitchManager = getMockSwitchService();
 		Assert.assertNotNull(mockSwitchManager);
-		System.out.println("..");
 
 		// Mock switches
 		DatapathId dpid1 = DatapathId.of(testDTO1.dpid);
