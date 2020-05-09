@@ -90,9 +90,9 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 		for (IOFSwitch currentSwitch : switchesAndFlowMods.keySet()) {
 
 			// OFPBCT_OPEN_REQUEST
-			OFBundleCtrlType ctrtype = OFBundleCtrlType.OPEN_REQUEST;
+			OFBundleCtrlType ctrOpentype = OFBundleCtrlType.OPEN_REQUEST;
 			currentOpen = this.FACTORY.buildBundleCtrlMsg()
-					.setBundleCtrlType(ctrtype).build();
+					.setBundleCtrlType(ctrOpentype).build();
 
 			// OFPT_FLOW_MOD + OFPFC_MODIFY_STRICT TableId=255
 			currentLock = this.FACTORY.buildFlowModifyStrict()
@@ -102,9 +102,9 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 			currentUpdate = switchesAndFlowMods.get(currentSwitch);
 
 			// OFPBCT_COMMIT_REQUEST
-			OFBundleCtrlType ctrtype2 = OFBundleCtrlType.COMMIT_REQUEST;
+			OFBundleCtrlType ctrCommitType = OFBundleCtrlType.COMMIT_REQUEST;
 			currentCommit = this.FACTORY.buildBundleCtrlMsg()
-					.setBundleCtrlType(ctrtype2).build();
+					.setBundleCtrlType(ctrCommitType).build();
 
 			// Build Bundle
 			currentBundleBuild = this.FACTORY.buildBundleAddMsg();
