@@ -16,12 +16,17 @@ import org.projectfloodlight.openflow.protocol.ver10.OFFactoryVer10;
 import org.projectfloodlight.openflow.protocol.ver14.OFFactoryVer14;
 import org.projectfloodlight.openflow.types.BundleId;
 import org.projectfloodlight.openflow.types.TableId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.IOFSwitch;
 
 public class ACIDUpdaterService implements IACIDUpdaterService {
 
+	protected static Logger log = LoggerFactory
+			.getLogger(SetPathResource.class);
+	
 	Map<UpdateID, List<MessagePair>> messages;
 	byte atmID;
 
@@ -53,17 +58,19 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 	@Override
 	public net.floodlightcontroller.core.IListener.Command receive(
 			IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
-		// TODO Not Tested
-
-		// - OFP_ERROR_MESSAGE + OFPET_FLOW_MOD_FAILED OFPBC_UNKOWN = What Primitive? TODO
-		// - OFP_ERROR_MESSAGE + OFPET_BUNDLE_FAILED OFPBFC_MSG_FAILED = What Primitive? TODO
-		// - OFPT_BUNDLE_CONTROL + OFPBCT_COMMIT_REPLY = What Primitive? TODO
-
-		UpdateID updateId = new UpdateID(msg.getXid());
+		
+		// - OFP_ERROR_MESSAGE + OFPET_FLOW_MOD_FAILED OFPBC_UNKOWN = FINISH
+		// - OFP_ERROR_MESSAGE + OFPET_BUNDLE_FAILED OFPBFC_MSG_FAILED = REJECT
+		// - OFPT_BUNDLE_CONTROL + OFPBCT_COMMIT_REPLY = CONFIRM
+		
+		UpdateID updateId = UpdateID.ofValue(msg.getXid());
 		MessagePair newPair = new MessagePair(sw, msg);
+		
+		log.debug("Got OpenFlow Message: " + updateId.toString());
 
 		List<MessagePair> currentList = this.messages.get(updateId);
 		if (currentList == null) {
+			log.debug("Unkown xid, creating new List");
 			currentList = new ArrayList<>();
 		}
 		
