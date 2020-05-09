@@ -39,7 +39,7 @@ public class ACIDUpdaterServiceTests extends FloodlightTestCase {
 		testSwitch = EasyMock.createNiceMock(IOFSwitch.class);
 		expect(testSwitch.getId()).andReturn(testDPID).anyTimes();
 		expect(testSwitch.getOFFactory()).andReturn(
-				OFFactories.getFactory(OFVersion.OF_13)).anyTimes();
+				OFFactories.getFactory(OFVersion.OF_14)).anyTimes();
 		replay(testSwitch);
 	}
 
@@ -114,7 +114,11 @@ public class ACIDUpdaterServiceTests extends FloodlightTestCase {
 
 	@Test
 	public void whenCommit_thenCorrect() {
-		Assert.fail("NIPY");
+		ArrayList<IOFSwitch> testSwitches = new ArrayList<>();
+		testSwitches.add(this.testSwitch);
+		
+		this.testAUS.commit(testSwitches);
+		Assert.fail("N fully IPY");
 	}
 
 	@Test

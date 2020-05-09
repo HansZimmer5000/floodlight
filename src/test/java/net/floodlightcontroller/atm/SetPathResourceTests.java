@@ -60,7 +60,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		IOFSwitch sw1 = EasyMock.createNiceMock(IOFSwitch.class);
 		expect(sw1.getId()).andReturn(dpid1).anyTimes();
 		expect(sw1.getOFFactory()).andReturn(
-				OFFactories.getFactory(OFVersion.OF_13)).anyTimes();
+				OFFactories.getFactory(OFVersion.OF_14)).anyTimes();
 		replay(sw1);
 		this.sw1 = sw1;
 
@@ -68,7 +68,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		IOFSwitch sw2 = EasyMock.createNiceMock(IOFSwitch.class);
 		expect(sw2.getId()).andReturn(dpid2).anyTimes();
 		expect(sw2.getOFFactory()).andReturn(
-				OFFactories.getFactory(OFVersion.OF_13)).anyTimes();
+				OFFactories.getFactory(OFVersion.OF_14)).anyTimes();
 		replay(sw2);
 		this.sw2 = sw2;
 
