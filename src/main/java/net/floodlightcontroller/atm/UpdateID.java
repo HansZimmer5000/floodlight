@@ -13,6 +13,12 @@ public class UpdateID {
 		this.restBytes = this.createRestBytes();
 	}
 	
+	public UpdateID(long atmID) {
+		//byte[] bytes = ByteBuffer.allocate(1).putShort(atmID).array();
+		this.atmID = new Long(atmID).byteValue();
+		this.restBytes = this.createRestBytes();
+	}
+	
 	public UpdateID(byte[] arr){
 		this.atmID = arr[0];
 		this.restBytes = new byte[3];
