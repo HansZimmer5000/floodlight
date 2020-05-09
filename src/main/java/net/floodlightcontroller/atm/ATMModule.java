@@ -67,7 +67,9 @@ public class ATMModule implements IFloodlightModule {
 		
 		// Add OpenFlow Listener
 		List<OFType> messageTypes = new ArrayList<>();
-		messageTypes.add(OFType.ERROR); //TODO Add all types
+		messageTypes.add(OFType.ERROR); 
+		messageTypes.add(OFType.BUNDLE_CONTROL);
+		
 		for (Iterator<OFType> iterator = messageTypes.iterator(); iterator.hasNext();) {
 			OFType ofType = (OFType) iterator.next();
 			provider.addOFMessageListener(ofType, updater);
