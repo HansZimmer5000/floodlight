@@ -30,31 +30,31 @@ import net.floodlightcontroller.test.FloodlightTestCase;
 
 public class SetPathResourceTests extends FloodlightTestCase {
 
-	private SetPathResource setPathResource;
-	private String exampleDPID = "AA:BB:CC:DD:EE:FF:00:11";
-	private String exampleFlowName = "flow-mode-1";
-	private int exampleInPort = 1;
-	private int exampleOutPort = 2;
-	private String exampleJson = "{\n" + "\"dpid\":       \"" + exampleDPID
-			+ "\",\n" + "\"name\":         \"" + exampleFlowName + "\",\n"
-			+ "\"inPort\": 		 \"" + String.valueOf(exampleInPort) + "\",\n"
-			+ "\"outPort\":      \"" + String.valueOf(exampleOutPort) + "\"\n"
+	private SetPathResource testSPR;
+	private String testDPID = "AA:BB:CC:DD:EE:FF:00:11";
+	private String testFlowName = "flow-mode-1";
+	private int testInPort = 1;
+	private int testOutPort = 2;
+	private String testJson = "{\n" + "\"dpid\":       \"" + testDPID
+			+ "\",\n" + "\"name\":         \"" + testFlowName + "\",\n"
+			+ "\"inPort\": 		 \"" + String.valueOf(testInPort) + "\",\n"
+			+ "\"outPort\":      \"" + String.valueOf(testOutPort) + "\"\n"
 			+ "}";
-	private String exampleEmptyJson = "{}";
-	private String exampleWrongFormatJson = "\n" + "\"dpid\":       \""
-			+ exampleDPID + "\",\n" + "\"name\":         \"" + exampleFlowName
-			+ "\",\n" + "\"inPort\": \"" + String.valueOf(exampleInPort)
-			+ "\",\n" + "\"outPort\":      \"" + String.valueOf(exampleOutPort)
+	private String testEmptyJson = "{}";
+	private String testWrongFormatJson = "\n" + "\"dpid\":       \""
+			+ testDPID + "\",\n" + "\"name\":         \"" + testFlowName
+			+ "\",\n" + "\"inPort\": \"" + String.valueOf(testInPort)
+			+ "\",\n" + "\"outPort\":      \"" + String.valueOf(testOutPort)
 			+ "\"\n" + "";
 	private FlowModDTO testDTO1 = new FlowModDTO("ab", "testName", 0, 1);
 	private FlowModDTO testDTO2 = new FlowModDTO("ab:cd", "testName", 1, 6);
-	private IOFSwitch sw1;
-	private IOFSwitch sw2;
+	private IOFSwitch testSwitch1;
+	private IOFSwitch testSwitch2;
 
 	@Override
 	public void setUp() throws Exception {
 		super.setUp();
-		this.setPathResource = new SetPathResource();
+		this.testSPR = new SetPathResource();
 
 		mockSwitchManager = getMockSwitchService();
 		Assert.assertNotNull(mockSwitchManager);
@@ -66,7 +66,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		expect(sw1.getOFFactory()).andReturn(
 				OFFactories.getFactory(OFVersion.OF_14)).anyTimes();
 		replay(sw1);
-		this.sw1 = sw1;
+		this.testSwitch1 = sw1;
 
 		DatapathId dpid2 = DatapathId.of(testDTO2.dpid);
 		IOFSwitch sw2 = EasyMock.createNiceMock(IOFSwitch.class);
@@ -74,7 +74,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		expect(sw2.getOFFactory()).andReturn(
 				OFFactories.getFactory(OFVersion.OF_14)).anyTimes();
 		replay(sw2);
-		this.sw2 = sw2;
+		this.testSwitch2 = sw2;
 
 		Map<DatapathId, IOFSwitch> switches = new HashMap<>();
 		switches.put(dpid1, sw1);
@@ -103,7 +103,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	}
 
 	@Test
-	public void whenExecuteFirstPhase_thenCorrect() {
+	public void whenExecuteFirstPhase_thenCorrect() {		
 		Assert.fail("NOT IMPLEMENTED YET!");
 	}
 
@@ -129,17 +129,17 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		flowModDTOs.add(testDTO1);
 		flowModDTOs.add(testDTO2);
 
-		Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods = this.setPathResource
+		Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods = this.testSPR
 				.getSwitchesAndFlowMods(mockSwitchManager, flowModDTOs,
 						updateID);
 
 		Assert.assertEquals(2, switchesAndFlowMods.size());
-		Assert.assertTrue(switchesAndFlowMods.keySet().contains(this.sw1));
-		Assert.assertTrue(switchesAndFlowMods.keySet().contains(this.sw2));
+		Assert.assertTrue(switchesAndFlowMods.keySet().contains(this.testSwitch1));
+		Assert.assertTrue(switchesAndFlowMods.keySet().contains(this.testSwitch2));
 
-		equalsOFFlowAdd(switchesAndFlowMods.get(this.sw1), testDTO1.inPort,
+		equalsOFFlowAdd(switchesAndFlowMods.get(this.testSwitch1), testDTO1.inPort,
 				testDTO1.outPort, updateID.toLong());
-		equalsOFFlowAdd(switchesAndFlowMods.get(this.sw2), testDTO2.inPort,
+		equalsOFFlowAdd(switchesAndFlowMods.get(this.testSwitch2), testDTO2.inPort,
 				testDTO2.outPort, updateID.toLong());
 	}
 
@@ -151,12 +151,12 @@ public class SetPathResourceTests extends FloodlightTestCase {
 
 		IOFSwitch testSwitch;
 
-		testSwitch = this.setPathResource.getAffectedSwitch(mockSwitchManager,
+		testSwitch = this.testSPR.getAffectedSwitch(mockSwitchManager,
 				testDTO1);
 		Assert.assertEquals("00:00:00:00:00:00:00:" + testDTO1.dpid, testSwitch
 				.getId().toString());
 
-		testSwitch = this.setPathResource.getAffectedSwitch(mockSwitchManager,
+		testSwitch = this.testSPR.getAffectedSwitch(mockSwitchManager,
 				testDTO2);
 		Assert.assertEquals("00:00:00:00:00:00:" + testDTO2.dpid, testSwitch
 				.getId().toString());
@@ -174,10 +174,10 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		List<MessagePair> messages = new ArrayList<>();
 		List<IOFSwitch> affectedSwitches = new ArrayList<>();
 
-		messages.add(new MessagePair(this.sw1, testMsg));
-		affectedSwitches.add(this.sw1);
+		messages.add(new MessagePair(this.testSwitch1, testMsg));
+		affectedSwitches.add(this.testSwitch1);
 
-		List<IOFSwitch> result = this.setPathResource.getUnconfirmedSwitches(
+		List<IOFSwitch> result = this.testSPR.getUnconfirmedSwitches(
 				messages, affectedSwitches);
 
 		Assert.assertEquals(0, result.size());
@@ -188,13 +188,13 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		List<MessagePair> messages = new ArrayList<>();
 		List<IOFSwitch> affectedSwitches = new ArrayList<>();
 
-		affectedSwitches.add(this.sw1);
+		affectedSwitches.add(this.testSwitch1);
 
-		List<IOFSwitch> result = this.setPathResource.getUnconfirmedSwitches(
+		List<IOFSwitch> result = this.testSPR.getUnconfirmedSwitches(
 				messages, affectedSwitches);
 
 		Assert.assertEquals(1, result.size());
-		Assert.assertEquals(this.sw1, result.get(0));
+		Assert.assertEquals(this.testSwitch1, result.get(0));
 	}
 	
 	@Test
@@ -209,14 +209,14 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		List<MessagePair> messages = new ArrayList<>();
 		List<IOFSwitch> affectedSwitches = new ArrayList<>();
 
-		messages.add(new MessagePair(this.sw1, testMsg));
-		affectedSwitches.add(this.sw1);
+		messages.add(new MessagePair(this.testSwitch1, testMsg));
+		affectedSwitches.add(this.testSwitch1);
 
-		List<IOFSwitch> result = this.setPathResource.getUnconfirmedSwitches(
+		List<IOFSwitch> result = this.testSPR.getUnconfirmedSwitches(
 				messages, affectedSwitches);
 
 		Assert.assertEquals(1, result.size());
-		Assert.assertEquals(this.sw1, result.get(0));
+		Assert.assertEquals(this.testSwitch1, result.get(0));
 	}
 	
 
@@ -231,10 +231,10 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		List<MessagePair> messages = new ArrayList<>();
 		List<IOFSwitch> affectedSwitches = new ArrayList<>();
 
-		messages.add(new MessagePair(this.sw1, testMsg));
-		affectedSwitches.add(this.sw1);
+		messages.add(new MessagePair(this.testSwitch1, testMsg));
+		affectedSwitches.add(this.testSwitch1);
 
-		List<IOFSwitch> result = this.setPathResource.getUnfinishedSwitches(
+		List<IOFSwitch> result = this.testSPR.getUnfinishedSwitches(
 				messages, affectedSwitches);
 
 		Assert.assertEquals(0, result.size());
@@ -245,13 +245,13 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		List<MessagePair> messages = new ArrayList<>();
 		List<IOFSwitch> affectedSwitches = new ArrayList<>();
 
-		affectedSwitches.add(this.sw1);
+		affectedSwitches.add(this.testSwitch1);
 
-		List<IOFSwitch> result = this.setPathResource.getUnfinishedSwitches(
+		List<IOFSwitch> result = this.testSPR.getUnfinishedSwitches(
 				messages, affectedSwitches);
 
 		Assert.assertEquals(1, result.size());
-		Assert.assertEquals(this.sw1, result.get(0));
+		Assert.assertEquals(this.testSwitch1, result.get(0));
 	}
 	
 	@Test
@@ -265,14 +265,14 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		List<MessagePair> messages = new ArrayList<>();
 		List<IOFSwitch> affectedSwitches = new ArrayList<>();
 
-		messages.add(new MessagePair(this.sw1, testMsg));
-		affectedSwitches.add(this.sw1);
+		messages.add(new MessagePair(this.testSwitch1, testMsg));
+		affectedSwitches.add(this.testSwitch1);
 
-		List<IOFSwitch> result = this.setPathResource.getUnfinishedSwitches(
+		List<IOFSwitch> result = this.testSPR.getUnfinishedSwitches(
 				messages, affectedSwitches);
 
 		Assert.assertEquals(1, result.size());
-		Assert.assertEquals(this.sw1, result.get(0));
+		Assert.assertEquals(this.testSwitch1, result.get(0));
 	}
 	
 
@@ -306,7 +306,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		testDTO.dpid = "abc";
 		testDTO.name = "testName";
 
-		OFFlowAdd testMod1 = this.setPathResource.createFlowMod(testDTO, xid);
+		OFFlowAdd testMod1 = this.testSPR.createFlowMod(testDTO, xid);
 
 		equalsOFFlowAdd(testMod1, testDTO.inPort, testDTO.outPort, xid);
 	}
@@ -316,7 +316,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		long xid = 16;
 
 		FlowModDTO testDTO = new FlowModDTO();
-		OFFlowAdd testMod1 = this.setPathResource.createFlowMod(testDTO, xid);
+		OFFlowAdd testMod1 = this.testSPR.createFlowMod(testDTO, xid);
 
 		Assert.assertEquals(null, testMod1);
 	}
@@ -324,32 +324,32 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	@Test
 	public void whenConvertJsonToMap_thenCorrect() {
 
-		ArrayList<FlowModDTO> testFlows = this.setPathResource
-				.convertJsonToDTO("[" + exampleJson + "]");
+		ArrayList<FlowModDTO> testFlows = this.testSPR
+				.convertJsonToDTO("[" + testJson + "]");
 		Assert.assertEquals(1, testFlows.size());
 
 		FlowModDTO testFlow = testFlows.get(0);
 
-		Assert.assertEquals(exampleDPID, testFlow.dpid);
-		Assert.assertEquals(exampleFlowName, testFlow.name);
-		Assert.assertEquals(exampleInPort, testFlow.inPort);
-		Assert.assertEquals(exampleOutPort, testFlow.outPort);
+		Assert.assertEquals(testDPID, testFlow.dpid);
+		Assert.assertEquals(testFlowName, testFlow.name);
+		Assert.assertEquals(testInPort, testFlow.inPort);
+		Assert.assertEquals(testOutPort, testFlow.outPort);
 
 	}
 
 	@Test
 	public void whenConvertJsonToMap_thenFail1() {
 
-		ArrayList<FlowModDTO> flowMods = this.setPathResource
-				.convertJsonToDTO(exampleWrongFormatJson);
+		ArrayList<FlowModDTO> flowMods = this.testSPR
+				.convertJsonToDTO(testWrongFormatJson);
 		Assert.assertEquals(0, flowMods.size());
 	}
 
 	@Test
 	public void whenConvertJsonToMap_thenFail2() {
 
-		ArrayList<FlowModDTO> flowMods = this.setPathResource
-				.convertJsonToDTO(exampleEmptyJson);
+		ArrayList<FlowModDTO> flowMods = this.testSPR
+				.convertJsonToDTO(testEmptyJson);
 		Assert.assertEquals(0, flowMods.size());
 	}
 
@@ -358,7 +358,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		OFFactoryVer14 testFactory = new OFFactoryVer14();
 		int outPort = 49;
 
-		List<OFAction> actions = this.setPathResource.createActions(
+		List<OFAction> actions = this.testSPR.createActions(
 				testFactory, outPort);
 		// Test Instructions (Actions)
 		Assert.assertEquals(1, actions.size());
@@ -371,7 +371,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		OFFactoryVer14 testFactory = new OFFactoryVer14();
 		int inPort = 49;
 
-		Match match = this.setPathResource.createMatch(testFactory, inPort);
+		Match match = this.testSPR.createMatch(testFactory, inPort);
 
 		Assert.assertEquals(inPort, match.get(MatchField.IN_PORT)
 				.getPortNumber());
