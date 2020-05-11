@@ -5,7 +5,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.projectfloodlight.openflow.protocol.BundleIdGenerator;
 import org.projectfloodlight.openflow.protocol.BundleIdGenerators;
+import org.projectfloodlight.openflow.protocol.OFBundleAddMsg;
 import org.projectfloodlight.openflow.protocol.OFBundleCtrlType;
 import org.projectfloodlight.openflow.protocol.OFFactory;
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
@@ -19,6 +21,7 @@ import org.projectfloodlight.openflow.types.TableId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import sun.util.resources.OpenListResourceBundle;
 import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.IOFSwitch;
 
@@ -26,7 +29,8 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 
 	protected static Logger log = LoggerFactory
 			.getLogger(SetPathResource.class);
-	
+
+	BundleIdGenerator bundleIdGenerator;
 	Map<UpdateID, List<MessagePair>> messages;
 	byte atmID;
 
@@ -34,6 +38,7 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 	final TableId TABLE_ID = TableId.of(255);
 
 	public ACIDUpdaterService() {
+		this.bundleIdGenerator = BundleIdGenerators.global();
 		messages = new HashMap<>();
 		this.atmID = UpdateID.createNewATMID();
 	}
@@ -58,14 +63,14 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 	@Override
 	public net.floodlightcontroller.core.IListener.Command receive(
 			IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
-		
+
 		// - OFP_ERROR_MESSAGE + OFPET_FLOW_MOD_FAILED OFPBC_UNKOWN = FINISH
 		// - OFP_ERROR_MESSAGE + OFPET_BUNDLE_FAILED OFPBFC_MSG_FAILED = REJECT
 		// - OFPT_BUNDLE_CONTROL + OFPBCT_COMMIT_REPLY = CONFIRM
-		
+
 		UpdateID updateId = UpdateID.ofValue(msg.getXid());
 		MessagePair newPair = new MessagePair(sw, msg);
-		
+
 		log.debug("Got OpenFlow Message: " + updateId.toString());
 
 		List<MessagePair> currentList = this.messages.get(updateId);
@@ -73,7 +78,7 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 			log.debug("Unkown xid, creating new List");
 			currentList = new ArrayList<>();
 		}
-		
+
 		currentList.add(newPair);
 		this.messages.put(updateId, currentList);
 
@@ -84,41 +89,42 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 	public void voteLock(Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods) {
 		// TODO Not Tested
 		BundleId currentBundleId;
-		Builder currentBundleBuild;
-		OFMessage currentBundle, currentOpen, currentLock, currentUpdate, currentCommit;
+		long currentXid;
+		OFMessage currentOpenBundle, currentLock, currentLockBundle, currentUpdate, currentUpdateBundle, currentCommitBundle;
 
 		for (IOFSwitch currentSwitch : switchesAndFlowMods.keySet()) {
+			currentBundleId = this.bundleIdGenerator.nextBundleId();
+			currentUpdate = switchesAndFlowMods.get(currentSwitch);
+			currentXid = currentUpdate.getXid();
 
 			// OFPBCT_OPEN_REQUEST
 			OFBundleCtrlType ctrOpentype = OFBundleCtrlType.OPEN_REQUEST;
-			currentOpen = this.FACTORY.buildBundleCtrlMsg()
-					.setBundleCtrlType(ctrOpentype).build();
+			currentOpenBundle = this.FACTORY.buildBundleCtrlMsg()
+					.setBundleCtrlType(ctrOpentype)
+					.setBundleId(currentBundleId).setXid(currentXid).build();
+			currentSwitch.write(currentOpenBundle);
 
 			// OFPT_FLOW_MOD + OFPFC_MODIFY_STRICT TableId=255
 			currentLock = this.FACTORY.buildFlowModifyStrict()
-					.setTableId(this.TABLE_ID).build();
+					.setTableId(this.TABLE_ID).setXid(currentXid).build();
+			currentLockBundle = this.FACTORY.buildBundleAddMsg()
+					.setBundleId(currentBundleId).setData(currentLock)
+					.setXid(currentXid).build();
+			currentSwitch.write(currentLockBundle);
 
 			// Update
-			currentUpdate = switchesAndFlowMods.get(currentSwitch);
+			currentUpdateBundle = this.FACTORY.buildBundleAddMsg()
+					.setBundleId(currentBundleId).setData(currentUpdate)
+					.setXid(currentXid).build();
+			currentSwitch.write(currentUpdateBundle);
 
 			// OFPBCT_COMMIT_REQUEST
 			OFBundleCtrlType ctrCommitType = OFBundleCtrlType.COMMIT_REQUEST;
-			currentCommit = this.FACTORY.buildBundleCtrlMsg()
-					.setBundleCtrlType(ctrCommitType).build();
+			currentCommitBundle = this.FACTORY.buildBundleCtrlMsg()
+					.setBundleCtrlType(ctrCommitType)
+					.setBundleId(currentBundleId).setXid(currentXid).build();
+			currentSwitch.write(currentCommitBundle);
 
-			// Build Bundle
-			currentBundleBuild = this.FACTORY.buildBundleAddMsg();
-			currentBundleId = BundleIdGenerators.create().nextBundleId();
-
-			currentBundleBuild.setBundleId(currentBundleId);
-			currentBundleBuild.setData(currentOpen);
-			currentBundleBuild.setData(currentLock);
-			currentBundleBuild.setData(currentUpdate);
-			currentBundleBuild.setData(currentCommit);
-			currentBundle = currentBundleBuild.build();
-
-			// Send Bundle
-			currentSwitch.write(currentBundle);
 		}
 	}
 
@@ -144,7 +150,8 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 		OFMessage currentMsg;
 
 		for (IOFSwitch currentSwitch : switches) {
-			currentMsg = this.FACTORY.buildFlowDelete().setTableId(this.TABLE_ID).build();
+			currentMsg = this.FACTORY.buildFlowDelete()
+					.setTableId(this.TABLE_ID).build();
 			currentSwitch.write(currentMsg);
 		}
 	}
