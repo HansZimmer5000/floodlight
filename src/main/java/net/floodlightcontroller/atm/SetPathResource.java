@@ -152,7 +152,8 @@ public class SetPathResource extends ServerResource {
 			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods,
 			List<MessagePair> messages) throws InterruptedException {
 		updateService.voteLock(switchesAndFlowMods);
-		Thread.sleep(ASP_TIMEOUT_MS);
+		Thread.sleep(ASP_TIMEOUT_MS);// TODO how long to wait? Or actively check
+		// whats inside messages?
 
 		List<IOFSwitch> unconfirmedSwitches = getUnconfirmedSwitches(messages,
 				affectedSwitches);

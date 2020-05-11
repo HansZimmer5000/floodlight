@@ -234,7 +234,6 @@ public class ACIDUpdaterServiceTests extends FloodlightTestCase {
 
 	@Test
 	public void whenCommit_thenCorrect() {
-		//OFPT_FLOW_MOD + OFPFC_DELETE TableId=255
         Capture<OFMessage> wc1 = new Capture<OFMessage>(CaptureType.ALL);
         IOFSwitch mockSwitch = createMock(IOFSwitch.class);
         expect(mockSwitch.getId()).andReturn(DatapathId.of(1L)).anyTimes();

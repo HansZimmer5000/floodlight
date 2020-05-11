@@ -50,13 +50,11 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 
 	@Override
 	public boolean isCallbackOrderingPrereq(OFType type, String name) {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
 	@Override
 	public boolean isCallbackOrderingPostreq(OFType type, String name) {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
@@ -87,7 +85,6 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 
 	@Override
 	public void voteLock(Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods) {
-		// TODO Not Tested
 		BundleId currentBundleId;
 		long currentXid;
 		OFMessage currentOpenBundle, currentLock, currentLockBundle, currentUpdate, currentUpdateBundle, currentCommitBundle;
@@ -130,7 +127,6 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 
 	@Override
 	public void rollback(List<IOFSwitch> switches) {
-		// TODO Not Tested
 		// OFPT_FLOW_MOD + OFPFC_DELETE_STRICT + TableId = 255
 
 		OFMessage currentMsg;
@@ -144,7 +140,6 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 
 	@Override
 	public void commit(List<IOFSwitch> switches) {
-		// TODO Not Tested
 		// OFPT_FLOW_MOD + OFPFC_DELETE TableId=255
 
 		OFMessage currentMsg;
