@@ -8,11 +8,15 @@ import java.util.Map;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
 
+import org.projectfloodlight.openflow.protocol.OFBundleCtrlType;
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
+import org.projectfloodlight.openflow.protocol.OFFlowModFailedCode;
+import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.protocol.ver14.OFFactoryVer14;
+import org.projectfloodlight.openflow.types.BundleId;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
 import org.projectfloodlight.openflow.types.OFBufferId;
@@ -94,7 +98,7 @@ public class SetPathResource extends ServerResource {
 			ArrayList<IOFSwitch> affectedSwitches, UpdateID updateID) {
 		Status status;
 		List<MessagePair> messages = updateService.getMessages(updateID);
-		
+
 		if (messages != null) {
 			// Update
 			updateNetwork(updateService, switchesAndFlowMods, affectedSwitches,
@@ -213,34 +217,51 @@ public class SetPathResource extends ServerResource {
 			List<IOFSwitch> affectedSwitches) {
 		List<IOFSwitch> unconfirmedSwitches = new ArrayList<>(affectedSwitches);
 		IOFSwitch messageSwitch;
+		OFMessage currentMessage;
 		boolean elemIsRemoved;
 
-		//TODO
+		// TODO
+		// OFMessage testMsg =
+		// factory.buildBundleCtrlMsg().setXid(testID.toLong()).setBundleCtrlType(OFBundleCtrlType.COMMIT_REPLY).setBundleId(BundleId.of(0)).build();
 		for (MessagePair currentMP : messages) {
 			messageSwitch = currentMP.ofswitch;
-			elemIsRemoved = unconfirmedSwitches.remove(messageSwitch);
-			if (!elemIsRemoved) {
-				log.debug("Confirmed Switch could not be removed: "
-						+ messageSwitch.getId().toString());
+			currentMessage = currentMP.ofmsg;
+			if (currentMessage.toString().contains("bundleCtrlType=COMMIT_REPLY")
+					&& currentMessage.toString().contains(
+							"OFBundleCtrlMsg")) {
+				elemIsRemoved = unconfirmedSwitches.remove(messageSwitch);
+				if (!elemIsRemoved) {
+					log.debug("Confirmed Switch could not be removed: "
+							+ messageSwitch.getId().toString());
+				}
 			}
 		}
 
 		return unconfirmedSwitches;
 	}
-	
+
 	public List<IOFSwitch> getUnfinishedSwitches(List<MessagePair> messages,
-			ArrayList<IOFSwitch> affectedSwitches) {
+			List<IOFSwitch> affectedSwitches) {
 		List<IOFSwitch> unfinishedSwitches = new ArrayList<>(affectedSwitches);
 		IOFSwitch messageSwitch;
+		OFMessage currentMessage;
 		boolean elemIsRemoved;
 
-		//TODO
+		// TODO
+		// OFMessage testMsg =
+		// factory.errorMsgs().buildFlowModFailedErrorMsg().setXid(testID.toLong()).setCode(OFFlowModFailedCode.UNKNOWN).build();
+
 		for (MessagePair currentMP : messages) {
 			messageSwitch = currentMP.ofswitch;
-			elemIsRemoved = unfinishedSwitches.remove(messageSwitch);
-			if (!elemIsRemoved) {
-				log.debug("Finished Switch could not be removed: "
-						+ messageSwitch.getId().toString());
+			currentMessage = currentMP.ofmsg;
+			if (currentMessage.toString().contains("code=UNKNOWN")
+					&& currentMessage.toString().contains(
+							"OFFlowModFailedErrorMsg")) {
+				elemIsRemoved = unfinishedSwitches.remove(messageSwitch);
+				if (!elemIsRemoved) {
+					log.debug("Finished Switch could not be removed: "
+							+ messageSwitch.getId().toString());
+				}
 			}
 		}
 

@@ -11,13 +11,17 @@ import java.util.Map;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;
+import org.projectfloodlight.openflow.protocol.OFBundleCtrlType;
 import org.projectfloodlight.openflow.protocol.OFFactories;
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
+import org.projectfloodlight.openflow.protocol.OFFlowModFailedCode;
+import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFVersion;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.protocol.ver14.OFFactoryVer14;
+import org.projectfloodlight.openflow.types.BundleId;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
 
@@ -159,14 +163,118 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	}
 
 	@Test
-	public void whenGetUnconfirmedSwitches_thenCorrect() throws Exception {
-		Assert.fail("NOT IMPLEMENTED YET");
+	public void whenGetUnconfirmedSwitches_thenCorrect1() throws Exception {
+		UpdateID testID = new UpdateID(3);
+		OFFactoryVer14 factory = new OFFactoryVer14();
+		OFMessage testMsg = factory.buildBundleCtrlMsg()
+				.setXid(testID.toLong())
+				.setBundleCtrlType(OFBundleCtrlType.COMMIT_REPLY)
+				.setBundleId(BundleId.of(0)).build();
+
+		List<MessagePair> messages = new ArrayList<>();
+		List<IOFSwitch> affectedSwitches = new ArrayList<>();
+
+		messages.add(new MessagePair(this.sw1, testMsg));
+		affectedSwitches.add(this.sw1);
+
+		List<IOFSwitch> result = this.setPathResource.getUnconfirmedSwitches(
+				messages, affectedSwitches);
+
+		Assert.assertEquals(0, result.size());
+	}
+
+	@Test
+	public void whenGetUnconfirmedSwitches_thenCorrect2() throws Exception {
+		List<MessagePair> messages = new ArrayList<>();
+		List<IOFSwitch> affectedSwitches = new ArrayList<>();
+
+		affectedSwitches.add(this.sw1);
+
+		List<IOFSwitch> result = this.setPathResource.getUnconfirmedSwitches(
+				messages, affectedSwitches);
+
+		Assert.assertEquals(1, result.size());
+		Assert.assertEquals(this.sw1, result.get(0));
 	}
 	
 	@Test
-	public void whenGetUnfinishedSwitches_thenCorrect() throws Exception {
-		Assert.fail("NOT IMPLEMENTED YET");
+	public void whenGetUnconfirmedSwitches_thenCorrect3() throws Exception {
+		UpdateID testID = new UpdateID(3);
+		OFFactoryVer14 factory = new OFFactoryVer14();
+		OFMessage testMsg = factory.buildBundleCtrlMsg()
+				.setXid(testID.toLong())
+				.setBundleCtrlType(OFBundleCtrlType.CLOSE_REQUEST)
+				.setBundleId(BundleId.of(0)).build();
+
+		List<MessagePair> messages = new ArrayList<>();
+		List<IOFSwitch> affectedSwitches = new ArrayList<>();
+
+		messages.add(new MessagePair(this.sw1, testMsg));
+		affectedSwitches.add(this.sw1);
+
+		List<IOFSwitch> result = this.setPathResource.getUnconfirmedSwitches(
+				messages, affectedSwitches);
+
+		Assert.assertEquals(1, result.size());
+		Assert.assertEquals(this.sw1, result.get(0));
 	}
+	
+
+	@Test
+	public void whenGetUnfinishedSwitches_thenCorrect1() throws Exception {
+		UpdateID testID = new UpdateID(3);
+		OFFactoryVer14 factory = new OFFactoryVer14();
+		OFMessage testMsg = factory.errorMsgs().buildFlowModFailedErrorMsg()
+				.setXid(testID.toLong()).setCode(OFFlowModFailedCode.UNKNOWN)
+				.build();
+
+		List<MessagePair> messages = new ArrayList<>();
+		List<IOFSwitch> affectedSwitches = new ArrayList<>();
+
+		messages.add(new MessagePair(this.sw1, testMsg));
+		affectedSwitches.add(this.sw1);
+
+		List<IOFSwitch> result = this.setPathResource.getUnfinishedSwitches(
+				messages, affectedSwitches);
+
+		Assert.assertEquals(0, result.size());
+	}
+	
+	@Test
+	public void whenGetUnfinishedSwitches_thenCorrect2() throws Exception {
+		List<MessagePair> messages = new ArrayList<>();
+		List<IOFSwitch> affectedSwitches = new ArrayList<>();
+
+		affectedSwitches.add(this.sw1);
+
+		List<IOFSwitch> result = this.setPathResource.getUnfinishedSwitches(
+				messages, affectedSwitches);
+
+		Assert.assertEquals(1, result.size());
+		Assert.assertEquals(this.sw1, result.get(0));
+	}
+	
+	@Test
+	public void whenGetUnfinishedSwitches_thenCorrect3() throws Exception {
+		UpdateID testID = new UpdateID(3);
+		OFFactoryVer14 factory = new OFFactoryVer14();
+		OFMessage testMsg = factory.errorMsgs().buildFlowModFailedErrorMsg()
+				.setXid(testID.toLong()).setCode(OFFlowModFailedCode.BAD_COMMAND)
+				.build();
+
+		List<MessagePair> messages = new ArrayList<>();
+		List<IOFSwitch> affectedSwitches = new ArrayList<>();
+
+		messages.add(new MessagePair(this.sw1, testMsg));
+		affectedSwitches.add(this.sw1);
+
+		List<IOFSwitch> result = this.setPathResource.getUnfinishedSwitches(
+				messages, affectedSwitches);
+
+		Assert.assertEquals(1, result.size());
+		Assert.assertEquals(this.sw1, result.get(0));
+	}
+	
 
 	private void equalsOFFlowAdd(OFFlowAdd testMod1, int inPort, int outPort,
 			long updateID) {
