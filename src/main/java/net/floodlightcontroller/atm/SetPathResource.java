@@ -117,27 +117,19 @@ public class SetPathResource extends ServerResource {
 			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods,
 			ArrayList<IOFSwitch> affectedSwitches, List<MessagePair> messages) {
 
+		// TODO control that every message that is send to the switches has correct xid!
 		try {
 			// Vote Lock and wait for commits
 			List<IOFSwitch> unconfirmedSwitches = executeFirstPhase(
 					updateService, affectedSwitches, switchesAndFlowMods,
 					messages);
 
-			// Rollback where necessary
-			executeSecondPhase(updateService, affectedSwitches,
-					unconfirmedSwitches);
+			// Rollback or Commit + wait for finishes
+			//List<IOFSwitch> unfinishedSwitches = 
+			executeSecondPhase(
+					updateService, affectedSwitches, unconfirmedSwitches,
+					messages);
 
-			// Commit and wait for finishes
-			List<IOFSwitch> unfinishedSwitches = executeThirdPhase(
-					updateService, affectedSwitches, messages);
-
-			if (unfinishedSwitches.size() == 0) {
-				// Everything OK
-			} else {
-				log.debug("Encountered " + unfinishedSwitches.size()
-						+ " unfinished Switches: "
-						+ unfinishedSwitches.toString());
-			}
 		} catch (InterruptedException e) {
 			log.debug("Encountered Interrupt during Update: " + e.getMessage());
 			e.printStackTrace();
@@ -160,27 +152,32 @@ public class SetPathResource extends ServerResource {
 		return unconfirmedSwitches;
 	}
 
-	public void executeSecondPhase(IACIDUpdaterService updateService,
-			List<IOFSwitch> affectedSwitches,
-			List<IOFSwitch> unconfirmedSwitches) {
-		if (unconfirmedSwitches.size() > 0) {
+	public List<IOFSwitch> executeSecondPhase(
+			IACIDUpdaterService updateService,
+			ArrayList<IOFSwitch> affectedSwitches,
+			List<IOFSwitch> unconfirmedSwitches, List<MessagePair> messages)
+			throws InterruptedException {
 
+		List<IOFSwitch> unfinishedSwitches = null;
+		if (unconfirmedSwitches.size() > 0) {
+			// Rollback
 			List<IOFSwitch> readySwitches = new ArrayList<>(affectedSwitches);
 			readySwitches.removeAll(unconfirmedSwitches);
 
 			updateService.rollback(readySwitches);
+			log.debug("Rolledback");
+		} else {
+			// Commit
+			updateService.commit(affectedSwitches);
+			Thread.sleep(FINISH_TIMEOUT_MS); // TODO how long to wait? Or
+												// actively check
+			// whats inside messages?
+
+			unfinishedSwitches = getUnfinishedSwitches(messages,
+					affectedSwitches);
+			log.debug("Encountered " + unfinishedSwitches.size()
+					+ " unfinished Switches: " + unfinishedSwitches.toString());
 		}
-	}
-
-	public List<IOFSwitch> executeThirdPhase(IACIDUpdaterService updateService,
-			ArrayList<IOFSwitch> affectedSwitches, List<MessagePair> messages)
-			throws InterruptedException {
-		updateService.commit(affectedSwitches);
-		Thread.sleep(FINISH_TIMEOUT_MS); // TODO how long to wait? Or actively check
-							// whats inside messages?
-
-		List<IOFSwitch> unfinishedSwitches = getUnfinishedSwitches(messages,
-				affectedSwitches);
 		return unfinishedSwitches;
 	}
 
@@ -225,9 +222,9 @@ public class SetPathResource extends ServerResource {
 		for (MessagePair currentMP : messages) {
 			messageSwitch = currentMP.ofswitch;
 			currentMessage = currentMP.ofmsg;
-			if (currentMessage.toString().contains("bundleCtrlType=COMMIT_REPLY")
-					&& currentMessage.toString().contains(
-							"OFBundleCtrlMsg")) {
+			if (currentMessage.toString().contains(
+					"bundleCtrlType=COMMIT_REPLY")
+					&& currentMessage.toString().contains("OFBundleCtrlMsg")) {
 				elemIsRemoved = unconfirmedSwitches.remove(messageSwitch);
 				if (!elemIsRemoved) {
 					log.debug("Confirmed Switch could not be removed: "

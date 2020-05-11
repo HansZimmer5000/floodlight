@@ -113,11 +113,6 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	}
 
 	@Test
-	public void whenExecuteThirdPhase_thenCorrect() {
-		Assert.fail("NOT IMPLEMENTED YET!");
-	}
-
-	@Test
 	public void whenGetSwitchesAndFlowMods_thenCorrct() {
 		mockSwitchManager = getMockSwitchService();
 		Assert.assertNotNull(mockSwitchManager);
