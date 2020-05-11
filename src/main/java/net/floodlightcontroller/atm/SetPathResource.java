@@ -34,7 +34,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class SetPathResource extends ServerResource {
 	protected static Logger log = LoggerFactory
 			.getLogger(SetPathResource.class);
-	static final long ASP_TIMEOUT_MS = 1;
+	static final long ASP_TIMEOUT_MS = 10000;
+	static final long FINISH_TIMEOUT_MS = 10000;
 
 	@Put
 	public String SetPath(String jsonBody) {
@@ -174,7 +175,7 @@ public class SetPathResource extends ServerResource {
 			ArrayList<IOFSwitch> affectedSwitches, List<MessagePair> messages)
 			throws InterruptedException {
 		updateService.commit(affectedSwitches);
-		Thread.sleep(1000); // TODO how long to wait? Or actively check
+		Thread.sleep(FINISH_TIMEOUT_MS); // TODO how long to wait? Or actively check
 							// whats inside messages?
 
 		List<IOFSwitch> unfinishedSwitches = getUnfinishedSwitches(messages,
@@ -220,9 +221,6 @@ public class SetPathResource extends ServerResource {
 		OFMessage currentMessage;
 		boolean elemIsRemoved;
 
-		// TODO
-		// OFMessage testMsg =
-		// factory.buildBundleCtrlMsg().setXid(testID.toLong()).setBundleCtrlType(OFBundleCtrlType.COMMIT_REPLY).setBundleId(BundleId.of(0)).build();
 		for (MessagePair currentMP : messages) {
 			messageSwitch = currentMP.ofswitch;
 			currentMessage = currentMP.ofmsg;
@@ -247,10 +245,6 @@ public class SetPathResource extends ServerResource {
 		OFMessage currentMessage;
 		boolean elemIsRemoved;
 
-		// TODO
-		// OFMessage testMsg =
-		// factory.errorMsgs().buildFlowModFailedErrorMsg().setXid(testID.toLong()).setCode(OFFlowModFailedCode.UNKNOWN).build();
-
 		for (MessagePair currentMP : messages) {
 			messageSwitch = currentMP.ofswitch;
 			currentMessage = currentMP.ofmsg;
@@ -271,9 +265,6 @@ public class SetPathResource extends ServerResource {
 	// Create a Flowmod that someone has to write to a switch with:
 	// IOFSwitch.write(flow);
 	public OFFlowAdd createFlowMod(FlowModDTO flowModDTO, long xid) {
-		// TODO set tableID here with some of the builders (is this neccesarry
-		// for for VoteLock?)
-
 		if (flowModDTO.dpid == FlowModDTO.STRING_DEFAULT
 				|| flowModDTO.name == FlowModDTO.STRING_DEFAULT
 				|| flowModDTO.inPort == FlowModDTO.INT_DEFAULT
