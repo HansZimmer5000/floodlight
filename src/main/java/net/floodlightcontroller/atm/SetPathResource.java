@@ -209,30 +209,13 @@ public class SetPathResource extends ServerResource {
 		return switchesAndFlowMods;
 	}
 
-	public List<IOFSwitch> getUnfinishedSwitches(List<MessagePair> messages,
-			ArrayList<IOFSwitch> affectedSwitches) {
-		List<IOFSwitch> unfinishedSwitches = new ArrayList<>(affectedSwitches);
-		IOFSwitch messageSwitch;
-		boolean elemIsRemoved;
-
-		for (MessagePair currentMP : messages) {
-			messageSwitch = currentMP.ofswitch;
-			elemIsRemoved = unfinishedSwitches.remove(messageSwitch);
-			if (!elemIsRemoved) {
-				log.debug("Finished Switch could not be removed: "
-						+ messageSwitch.getId().toString());
-			}
-		}
-
-		return unfinishedSwitches;
-	}
-
 	public List<IOFSwitch> getUnconfirmedSwitches(List<MessagePair> messages,
 			List<IOFSwitch> affectedSwitches) {
 		List<IOFSwitch> unconfirmedSwitches = new ArrayList<>(affectedSwitches);
 		IOFSwitch messageSwitch;
 		boolean elemIsRemoved;
 
+		//TODO
 		for (MessagePair currentMP : messages) {
 			messageSwitch = currentMP.ofswitch;
 			elemIsRemoved = unconfirmedSwitches.remove(messageSwitch);
@@ -243,6 +226,25 @@ public class SetPathResource extends ServerResource {
 		}
 
 		return unconfirmedSwitches;
+	}
+	
+	public List<IOFSwitch> getUnfinishedSwitches(List<MessagePair> messages,
+			ArrayList<IOFSwitch> affectedSwitches) {
+		List<IOFSwitch> unfinishedSwitches = new ArrayList<>(affectedSwitches);
+		IOFSwitch messageSwitch;
+		boolean elemIsRemoved;
+
+		//TODO
+		for (MessagePair currentMP : messages) {
+			messageSwitch = currentMP.ofswitch;
+			elemIsRemoved = unfinishedSwitches.remove(messageSwitch);
+			if (!elemIsRemoved) {
+				log.debug("Finished Switch could not be removed: "
+						+ messageSwitch.getId().toString());
+			}
+		}
+
+		return unfinishedSwitches;
 	}
 
 	// Create a Flowmod that someone has to write to a switch with:

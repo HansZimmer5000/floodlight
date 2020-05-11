@@ -159,12 +159,12 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	}
 
 	@Test
-	public void whenGetUnfinishedSwitches_thenCorrect() throws Exception {
+	public void whenGetUnconfirmedSwitches_thenCorrect() throws Exception {
 		Assert.fail("NOT IMPLEMENTED YET");
 	}
-
+	
 	@Test
-	public void whenGetUnconfirmedSwitches_thenCorrect() throws Exception {
+	public void whenGetUnfinishedSwitches_thenCorrect() throws Exception {
 		Assert.fail("NOT IMPLEMENTED YET");
 	}
 
