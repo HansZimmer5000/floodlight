@@ -41,6 +41,10 @@ public class SetPathResource extends ServerResource {
 		if (null != dry_run){
 			ArrayList<FlowModDTO> flowModDTOs = convertJsonToDTO(jsonBody);
 			
+			if (flowModDTOs.size()==0){
+				System.out.println(jsonBody);
+			}
+			
 			this.setStatus(Status.SUCCESS_OK);
 			return String.valueOf(flowModDTOs.size());
 		}

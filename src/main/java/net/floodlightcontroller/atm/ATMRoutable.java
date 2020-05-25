@@ -19,13 +19,16 @@ public class ATMRoutable implements RestletRoutable {
 	public Restlet getRestlet(Context context) {
         Router router = new Router(context);
         
-        router.attach("/flows", SetPathResource.class);
+        router.attach("/atm/flows", SetPathResource.class);
+        router.attach("/healthz", HealthzResource.class);
         
         return router;
 	}
+	
+	
 
 	@Override
 	public String basePath() {
-		return "/atm";
+		return "";
 	}
 }
