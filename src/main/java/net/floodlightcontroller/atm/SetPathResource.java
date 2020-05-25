@@ -8,20 +8,18 @@ import java.util.Map;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
 
-import org.projectfloodlight.openflow.protocol.OFBundleCtrlType;
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
-import org.projectfloodlight.openflow.protocol.OFFlowModFailedCode;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.protocol.ver14.OFFactoryVer14;
-import org.projectfloodlight.openflow.types.BundleId;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
 import org.projectfloodlight.openflow.types.OFBufferId;
 import org.projectfloodlight.openflow.types.OFPort;
 import org.projectfloodlight.openflow.types.TableId;
+import org.restlet.data.Header;
 import org.restlet.data.Status;
 import org.restlet.resource.Put;
 import org.restlet.resource.ServerResource;
@@ -39,6 +37,14 @@ public class SetPathResource extends ServerResource {
 
 	@Put
 	public String SetPath(String jsonBody) {
+		Header dry_run = this.getRequest().getHeaders().getFirst("dry_run");
+		if (null != dry_run){
+			ArrayList<FlowModDTO> flowModDTOs = convertJsonToDTO(jsonBody);
+			
+			this.setStatus(Status.SUCCESS_OK);
+			return String.valueOf(flowModDTOs.size());
+		}
+		
 		log.debug("SetPathReceived:" + jsonBody);
 
 		Status status = new Status(418);
