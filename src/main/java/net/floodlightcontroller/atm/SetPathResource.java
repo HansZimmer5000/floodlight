@@ -32,62 +32,66 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class SetPathResource extends ServerResource {
 	protected static Logger log = LoggerFactory
 			.getLogger(SetPathResource.class);
-	static final long ASP_TIMEOUT_MS = 10000;
-	static final long FINISH_TIMEOUT_MS = 10000;
+	static final long ASP_TIMEOUT_MS = 2000;
+	static final long FINISH_TIMEOUT_MS = 2000;
 
 	@Put
 	public String SetPath(String jsonBody) {
 		Header dry_run = this.getRequest().getHeaders().getFirst("dry_run");
-		if (null != dry_run){
+		if (null != dry_run) {
+			// dry run
 			ArrayList<FlowModDTO> flowModDTOs = convertJsonToDTO(jsonBody);
-			
-			if (flowModDTOs.size()==0){
+
+			if (flowModDTOs.size() == 0) {
 				System.out.println(jsonBody);
 			}
-			
+
 			this.setStatus(Status.SUCCESS_OK);
 			return String.valueOf(flowModDTOs.size());
-		}
-		
-		log.debug("SetPathReceived:" + jsonBody);
-
-		Status status = new Status(418);
-		String message = "";
-
-		// Get Services
-		IACIDUpdaterService updateService = (IACIDUpdaterService) this
-				.getContext().getAttributes()
-				.get(IACIDUpdaterService.class.getCanonicalName());
-
-		IOFSwitchService switchService = (IOFSwitchService) this.getContext()
-				.getAttributes().get(IOFSwitchService.class.getCanonicalName());
-
-		// Extract info from Request
-		ArrayList<FlowModDTO> flowModDTOs = convertJsonToDTO(jsonBody);
-
-		// Prepare Update
-		UpdateID updateID = updateService.createNewUpdateIDAndPrepareMessages();
-		Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods = getSwitchesAndFlowMods(
-				switchService, flowModDTOs, updateID);
-
-		if (switchesAndFlowMods != null) {
-			if (flowModDTOs.size() == switchesAndFlowMods.size()) {
-
-				status = getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
-						switchService, updateService, switchesAndFlowMods,
-						updateID);
-			} else {
-				log.debug("FlowModDTOs size was not equal to switchesAndFlowMods. Are there duplicates in DTOs or switch dpids that are not existent?");
-				status = Status.CLIENT_ERROR_NOT_FOUND;
-			}
 		} else {
-			log.debug("FlowMods could not be created fully");
-			status = Status.CLIENT_ERROR_BAD_REQUEST;
-		}
+			// "real" run
+			log.debug("SetPathReceived:" + jsonBody);
 
-		// Respond to user
-		setStatus(status);
-		return message;
+			Status status = new Status(418);
+			String message = "";
+
+			// Get Services
+			IACIDUpdaterService updateService = (IACIDUpdaterService) this
+					.getContext().getAttributes()
+					.get(IACIDUpdaterService.class.getCanonicalName());
+
+			IOFSwitchService switchService = (IOFSwitchService) this
+					.getContext().getAttributes()
+					.get(IOFSwitchService.class.getCanonicalName());
+
+			// Extract info from Request
+			ArrayList<FlowModDTO> flowModDTOs = convertJsonToDTO(jsonBody);
+
+			// Prepare Update
+			UpdateID updateID = updateService
+					.createNewUpdateIDAndPrepareMessages();
+			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods = getSwitchesAndFlowMods(
+					switchService, flowModDTOs, updateID);
+
+			if (switchesAndFlowMods != null) {
+				if (flowModDTOs.size() == switchesAndFlowMods.size()) {
+
+					status = getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
+							switchService, updateService, switchesAndFlowMods,
+							updateID);
+				} else {
+					log.debug("FlowModDTOs size was not equal to switchesAndFlowMods. Are there duplicates in DTOs or switch dpids that are not existent?");
+					status = Status.CLIENT_ERROR_NOT_FOUND;
+				}
+			} else {
+				log.debug("FlowMods could not be created fully");
+				status = Status.CLIENT_ERROR_BAD_REQUEST;
+			}
+
+			// Respond to user
+			setStatus(status);
+			return message;
+		}
 	}
 
 	public Status getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
@@ -113,7 +117,7 @@ public class SetPathResource extends ServerResource {
 		if (messages != null) {
 			// Update
 			updateNetwork(updateService, switchesAndFlowMods, affectedSwitches,
-					messages);
+					messages, updateID);
 			status = Status.SUCCESS_NO_CONTENT;
 		} else {
 			log.debug("Messages was null");
@@ -125,20 +129,21 @@ public class SetPathResource extends ServerResource {
 
 	public void updateNetwork(IACIDUpdaterService updateService,
 			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods,
-			ArrayList<IOFSwitch> affectedSwitches, List<MessagePair> messages) {
+			ArrayList<IOFSwitch> affectedSwitches, List<MessagePair> messages,
+			UpdateID updateID) {
 
-		// TODO control that every message that is send to the switches has correct xid!
+		// TODO control that every message that is send to the switches has
+		// correct xid!
 		try {
 			// Vote Lock and wait for commits
 			List<IOFSwitch> unconfirmedSwitches = executeFirstPhase(
 					updateService, affectedSwitches, switchesAndFlowMods,
-					messages);
+					messages, updateID);
 
 			// Rollback or Commit + wait for finishes
-			//List<IOFSwitch> unfinishedSwitches = 
-			executeSecondPhase(
-					updateService, affectedSwitches, unconfirmedSwitches,
-					messages);
+			// List<IOFSwitch> unfinishedSwitches =
+			executeSecondPhase(updateService, affectedSwitches,
+					unconfirmedSwitches, messages, updateID);
 
 		} catch (InterruptedException e) {
 			log.debug("Encountered Interrupt during Update: " + e.getMessage());
@@ -152,7 +157,8 @@ public class SetPathResource extends ServerResource {
 	public List<IOFSwitch> executeFirstPhase(IACIDUpdaterService updateService,
 			List<IOFSwitch> affectedSwitches,
 			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods,
-			List<MessagePair> messages) throws InterruptedException {
+			List<MessagePair> messages, UpdateID updateID)
+			throws InterruptedException {
 		updateService.voteLock(switchesAndFlowMods);
 		Thread.sleep(ASP_TIMEOUT_MS);// TODO how long to wait? Or actively check
 		// whats inside messages?
@@ -165,8 +171,8 @@ public class SetPathResource extends ServerResource {
 	public List<IOFSwitch> executeSecondPhase(
 			IACIDUpdaterService updateService,
 			ArrayList<IOFSwitch> affectedSwitches,
-			List<IOFSwitch> unconfirmedSwitches, List<MessagePair> messages)
-			throws InterruptedException {
+			List<IOFSwitch> unconfirmedSwitches, List<MessagePair> messages,
+			UpdateID updateID) throws InterruptedException {
 
 		List<IOFSwitch> unfinishedSwitches = null;
 		if (unconfirmedSwitches.size() > 0) {
@@ -174,11 +180,11 @@ public class SetPathResource extends ServerResource {
 			List<IOFSwitch> readySwitches = new ArrayList<>(affectedSwitches);
 			readySwitches.removeAll(unconfirmedSwitches);
 
-			updateService.rollback(readySwitches);
+			updateService.rollback(readySwitches, updateID.toLong());
 			log.debug("Rolledback");
 		} else {
 			// Commit
-			updateService.commit(affectedSwitches);
+			updateService.commit(affectedSwitches, updateID.toLong());
 			Thread.sleep(FINISH_TIMEOUT_MS); // TODO how long to wait? Or
 												// actively check
 			// whats inside messages?

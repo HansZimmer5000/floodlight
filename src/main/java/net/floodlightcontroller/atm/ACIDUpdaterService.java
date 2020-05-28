@@ -35,7 +35,7 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 	byte atmID;
 
 	final OFFactory FACTORY = new OFFactoryVer14();
-	final TableId TABLE_ID = TableId.of(255);
+	final TableId ASP_TABLE_ID = TableId.of(255);
 
 	public ACIDUpdaterService() {
 		this.bundleIdGenerator = BundleIdGenerators.global();
@@ -103,7 +103,7 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 
 			// OFPT_FLOW_MOD + OFPFC_MODIFY_STRICT TableId=255
 			currentLock = this.FACTORY.buildFlowModifyStrict()
-					.setTableId(this.TABLE_ID).setXid(currentXid).build();
+					.setTableId(this.ASP_TABLE_ID).setXid(currentXid).build();
 			currentLockBundle = this.FACTORY.buildBundleAddMsg()
 					.setBundleId(currentBundleId).setData(currentLock)
 					.setXid(currentXid).build();
@@ -126,27 +126,27 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 	}
 
 	@Override
-	public void rollback(List<IOFSwitch> switches) {
+	public void rollback(List<IOFSwitch> switches, long xid) {
 		// OFPT_FLOW_MOD + OFPFC_DELETE_STRICT + TableId = 255
 
 		OFMessage currentMsg;
 
 		for (IOFSwitch currentSwitch : switches) {
 			currentMsg = this.FACTORY.buildFlowDeleteStrict()
-					.setTableId(this.TABLE_ID).build();
+					.setTableId(this.ASP_TABLE_ID).setXid(xid).build();
 			currentSwitch.write(currentMsg);
 		}
 	}
 
 	@Override
-	public void commit(List<IOFSwitch> switches) {
+	public void commit(List<IOFSwitch> switches, long xid) {
 		// OFPT_FLOW_MOD + OFPFC_DELETE TableId=255
 
 		OFMessage currentMsg;
 
 		for (IOFSwitch currentSwitch : switches) {
-			currentMsg = this.FACTORY.buildFlowDelete()
-					.setTableId(this.TABLE_ID).build();
+			currentMsg = this.FACTORY.buildFlowDelete().setXid(xid)
+					.setTableId(this.ASP_TABLE_ID).build();
 			currentSwitch.write(currentMsg);
 		}
 	}

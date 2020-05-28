@@ -33,6 +33,8 @@ import org.projectfloodlight.openflow.protocol.OFBundleCtrlType;
 import org.projectfloodlight.openflow.protocol.OFBundleFailedCode;
 import org.projectfloodlight.openflow.protocol.OFFactories;
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
+import org.projectfloodlight.openflow.protocol.OFFlowMod;
+import org.projectfloodlight.openflow.protocol.OFFlowModCommand;
 import org.projectfloodlight.openflow.protocol.OFFlowModFailedCode;
 import org.projectfloodlight.openflow.protocol.OFFlowModFlags;
 import org.projectfloodlight.openflow.protocol.OFFlowModifyStrict;
@@ -215,6 +217,7 @@ public class ACIDUpdaterServiceTests extends FloodlightTestCase {
 
 	@Test
 	public void whenRollback_thenCorrect() {
+		UpdateID testID = new UpdateID(UpdateID.createNewATMID());
         Capture<OFMessage> wc1 = new Capture<OFMessage>(CaptureType.ALL);
         IOFSwitch mockSwitch = createMock(IOFSwitch.class);
         expect(mockSwitch.getId()).andReturn(DatapathId.of(1L)).anyTimes();
@@ -222,18 +225,22 @@ public class ACIDUpdaterServiceTests extends FloodlightTestCase {
         expect(mockSwitch.write(EasyMock.capture(wc1))).andReturn(true).once(); // expect packetOut
         replay(mockSwitch);
         
-        OFMessage testMsg = this.factory.buildFlowDeleteStrict().setTableId(TableId.of(255)).build();
         ArrayList<IOFSwitch> switches = new ArrayList<>();
         switches.add(mockSwitch);
         
-        this.testAUS.rollback(switches);
+        this.testAUS.rollback(switches, testID.toLong());
         
         assertTrue(wc1.hasCaptured());
-        assertTrue(OFMessageUtils.equalsIgnoreXid(wc1.getValue(), testMsg));
+		Assert.assertTrue(wc1.getValue() instanceof OFFlowMod);
+		OFFlowMod commit1 = (OFFlowMod) wc1.getValue();
+		Assert.assertEquals(testID.toLong(), commit1.getXid());
+		Assert.assertEquals(OFFlowModCommand.DELETE_STRICT,
+				commit1.getCommand());
 	}
 
 	@Test
 	public void whenCommit_thenCorrect() {
+		UpdateID testID = new UpdateID(UpdateID.createNewATMID());
         Capture<OFMessage> wc1 = new Capture<OFMessage>(CaptureType.ALL);
         IOFSwitch mockSwitch = createMock(IOFSwitch.class);
         expect(mockSwitch.getId()).andReturn(DatapathId.of(1L)).anyTimes();
@@ -241,14 +248,17 @@ public class ACIDUpdaterServiceTests extends FloodlightTestCase {
         expect(mockSwitch.write(EasyMock.capture(wc1))).andReturn(true).once(); // expect packetOut
         replay(mockSwitch);
         
-        OFMessage testMsg = this.factory.buildFlowDelete().setTableId(TableId.of(255)).build();
         ArrayList<IOFSwitch> switches = new ArrayList<>();
         switches.add(mockSwitch);
         
-        this.testAUS.commit(switches);
+        this.testAUS.commit(switches, testID.toLong());
         
         assertTrue(wc1.hasCaptured());
-        assertTrue(OFMessageUtils.equalsIgnoreXid(wc1.getValue(), testMsg));
+		Assert.assertTrue(wc1.getValue() instanceof OFFlowMod);
+		OFFlowMod commit1 = (OFFlowMod) wc1.getValue();
+		Assert.assertEquals(testID.toLong(), commit1.getXid());
+		Assert.assertEquals(OFFlowModCommand.DELETE,
+				commit1.getCommand());
 	}
 
 	@Test

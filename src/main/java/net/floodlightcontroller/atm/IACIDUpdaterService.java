@@ -19,7 +19,7 @@ public interface IACIDUpdaterService extends IFloodlightService, IOFMessageListe
 	
 	public void voteLock(Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods);
 	
-	public void rollback(List<IOFSwitch> switches);
+	public void rollback(List<IOFSwitch> switches, long xid);
 	
-	public void commit(List<IOFSwitch> switches);
+	public void commit(List<IOFSwitch> switches, long xid);
 }
