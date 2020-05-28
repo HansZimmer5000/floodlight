@@ -35,56 +35,84 @@ public class SetPathResource extends ServerResource {
 	static final long ASP_TIMEOUT_MS = 2000;
 	static final long FINISH_TIMEOUT_MS = 2000;
 
+	public UpdateID _updateID;
+	public ArrayList<FlowModDTO> _flowModDTOs;
+	public Map<IOFSwitch, OFFlowAdd> _switchesAndFlowMods;
+	public IACIDUpdaterService _updateService;
+	public IOFSwitchService _switchService;
+
 	@Put
 	public String SetPath(String jsonBody) {
+		log.debug("SetPathReceived:" + jsonBody);
+		prepareUpdate(jsonBody);
+
 		Header dry_run = this.getRequest().getHeaders().getFirst("dry_run");
 		if (null != dry_run) {
 			// dry run
-			ArrayList<FlowModDTO> flowModDTOs = convertJsonToDTO(jsonBody);
+			log.debug("DryRun");
 
-			if (flowModDTOs.size() == 0) {
+			if (this._flowModDTOs.size() == 0) {
 				System.out.println(jsonBody);
 			}
 
 			this.setStatus(Status.SUCCESS_OK);
-			return String.valueOf(flowModDTOs.size());
+			return String.valueOf(this._flowModDTOs.size());
 		} else {
 			// "real" run
-			log.debug("SetPathReceived:" + jsonBody);
 
 			Status status = new Status(418);
 			String message = "";
 
-			// Get Services
-			IACIDUpdaterService updateService = (IACIDUpdaterService) this
-					.getContext().getAttributes()
-					.get(IACIDUpdaterService.class.getCanonicalName());
+			// TODO Refactor, May move more code to "prepareUpdate"
+			// TODO Refactor, May make more use of class & public field
+			// structure!s
+			if (this._switchesAndFlowMods != null) {
+				if (this._flowModDTOs.size() == this._switchesAndFlowMods
+						.size()) {
 
-			IOFSwitchService switchService = (IOFSwitchService) this
-					.getContext().getAttributes()
-					.get(IOFSwitchService.class.getCanonicalName());
+					ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>(
+							this._switchesAndFlowMods.keySet());
 
-			// Extract info from Request
-			ArrayList<FlowModDTO> flowModDTOs = convertJsonToDTO(jsonBody);
-
-			// Prepare Update
-			UpdateID updateID = updateService
-					.createNewUpdateIDAndPrepareMessages();
-			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods = getSwitchesAndFlowMods(
-					switchService, flowModDTOs, updateID);
-
-			if (switchesAndFlowMods != null) {
-				if (flowModDTOs.size() == switchesAndFlowMods.size()) {
-
-					status = getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
-							switchService, updateService, switchesAndFlowMods,
-							updateID);
+					List<MessagePair> messages = this._updateService
+							.getMessages(this._updateID);
+					if (messages != null) {
+						// Update
+						try {
+							List<IOFSwitch> unfinishedSwitches = updateNetwork(this._updateService,
+									this._switchesAndFlowMods,
+									affectedSwitches, messages, this._updateID);
+							
+							if (unfinishedSwitches.size() > 0){
+								status = Status.SERVER_ERROR_INTERNAL;
+								message = "There are unfinished Switches: ";
+								for (IOFSwitch sw : unfinishedSwitches){
+									message += sw.getId().toString();
+									message += " ";
+								}
+							}
+						} catch (InterruptedException e) {
+							log.debug("Encountered Interrupt during Update: "
+									+ e.getMessage());
+							message = e.getMessage();
+						} catch (Exception e) {
+							log.debug("Encountered Exception during Update: "
+									+ e.getMessage());
+							message = e.getMessage();
+						}
+						status = Status.SUCCESS_NO_CONTENT;
+					} else {
+						log.debug("Received message array was null");
+						message = "Received message array was null";
+						status = Status.SERVER_ERROR_INTERNAL;
+					}
 				} else {
 					log.debug("FlowModDTOs size was not equal to switchesAndFlowMods. Are there duplicates in DTOs or switch dpids that are not existent?");
+					message = "FlowModDTOs size was not equal to switchesAndFlowMods. Are there duplicates in DTOs or switch dpids that are not existent?";
 					status = Status.CLIENT_ERROR_NOT_FOUND;
 				}
 			} else {
 				log.debug("FlowMods could not be created fully");
+				message = "FlowMods could not be created fully";
 				status = Status.CLIENT_ERROR_BAD_REQUEST;
 			}
 
@@ -94,64 +122,42 @@ public class SetPathResource extends ServerResource {
 		}
 	}
 
-	public Status getAffectedSwitchesAndGetMessagesAndUpdateNetwork(
-			IOFSwitchService switchService, IACIDUpdaterService updateService,
-			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods, UpdateID updateID) {
-		Status status;
-		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>(
-				switchesAndFlowMods.keySet());
+	public void prepareUpdate(String jsonBody) {
+		// Get Services
+		this._updateService = (IACIDUpdaterService) this.getContext()
+				.getAttributes()
+				.get(IACIDUpdaterService.class.getCanonicalName());
 
-		status = getMessagesAndUpdateNetwork(updateService,
-				switchesAndFlowMods, affectedSwitches, updateID);
+		this._switchService = (IOFSwitchService) this.getContext()
+				.getAttributes().get(IOFSwitchService.class.getCanonicalName());
 
-		return status;
+		// Extract info from Request
+		this._flowModDTOs = convertJsonToDTO(jsonBody);
+
+		// Prepare Update
+		this._updateID = this._updateService
+				.createNewUpdateIDAndPrepareMessages();
+		this._switchesAndFlowMods = getSwitchesAndFlowMods(this._switchService,
+				this._flowModDTOs, this._updateID);
 	}
 
-	public Status getMessagesAndUpdateNetwork(
-			IACIDUpdaterService updateService,
-			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods,
-			ArrayList<IOFSwitch> affectedSwitches, UpdateID updateID) {
-		Status status;
-		List<MessagePair> messages = updateService.getMessages(updateID);
-
-		if (messages != null) {
-			// Update
-			updateNetwork(updateService, switchesAndFlowMods, affectedSwitches,
-					messages, updateID);
-			status = Status.SUCCESS_NO_CONTENT;
-		} else {
-			log.debug("Messages was null");
-			status = Status.SERVER_ERROR_INTERNAL;
-		}
-
-		return status;
-	}
-
-	public void updateNetwork(IACIDUpdaterService updateService,
+	public List<IOFSwitch> updateNetwork(IACIDUpdaterService updateService,
 			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods,
 			ArrayList<IOFSwitch> affectedSwitches, List<MessagePair> messages,
-			UpdateID updateID) {
+			UpdateID updateID) throws InterruptedException {
 
 		// TODO control that every message that is send to the switches has
 		// correct xid!
-		try {
-			// Vote Lock and wait for commits
-			List<IOFSwitch> unconfirmedSwitches = executeFirstPhase(
-					updateService, affectedSwitches, switchesAndFlowMods,
-					messages, updateID);
 
-			// Rollback or Commit + wait for finishes
-			// List<IOFSwitch> unfinishedSwitches =
-			executeSecondPhase(updateService, affectedSwitches,
-					unconfirmedSwitches, messages, updateID);
+		// Vote Lock and wait for commits
+		List<IOFSwitch> unconfirmedSwitches = executeFirstPhase(updateService,
+				affectedSwitches, switchesAndFlowMods, messages, updateID);
 
-		} catch (InterruptedException e) {
-			log.debug("Encountered Interrupt during Update: " + e.getMessage());
-			e.printStackTrace();
-		} catch (Exception e) {
-			log.debug("Encountered Exception during Update: " + e.getMessage());
-			e.printStackTrace();
-		}
+		// Rollback or Commit + wait for finishes
+		// List<IOFSwitch> unfinishedSwitches =
+		List<IOFSwitch> unfinished = executeSecondPhase(updateService, affectedSwitches,
+				unconfirmedSwitches, messages, updateID);
+		return unfinished;
 	}
 
 	public List<IOFSwitch> executeFirstPhase(IACIDUpdaterService updateService,

@@ -14,17 +14,16 @@ import org.easymock.CaptureType;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;
+import org.projectfloodlight.openflow.protocol.OFBundleAddMsg;
 import org.projectfloodlight.openflow.protocol.OFBundleCtrlMsg;
 import org.projectfloodlight.openflow.protocol.OFBundleCtrlType;
 import org.projectfloodlight.openflow.protocol.OFBundleFailedCode;
-import org.projectfloodlight.openflow.protocol.OFErrorMsg;
 import org.projectfloodlight.openflow.protocol.OFFactories;
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
 import org.projectfloodlight.openflow.protocol.OFFlowMod;
 import org.projectfloodlight.openflow.protocol.OFFlowModCommand;
 import org.projectfloodlight.openflow.protocol.OFFlowModFailedCode;
 import org.projectfloodlight.openflow.protocol.OFMessage;
-import org.projectfloodlight.openflow.protocol.OFType;
 import org.projectfloodlight.openflow.protocol.OFVersion;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.match.Match;
@@ -33,7 +32,9 @@ import org.projectfloodlight.openflow.protocol.ver14.OFFactoryVer14;
 import org.projectfloodlight.openflow.types.BundleId;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
-import org.restlet.Uniform;
+import org.restlet.Context;
+import org.restlet.Request;
+import org.restlet.resource.ServerResource;
 
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.test.FloodlightTestCase;
@@ -102,30 +103,128 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	}
 
 	@Test
-	public void whenSetPath_thenCorrect() throws Exception {
-		// this.testSPR.SetPath(this.testMessagesRaw);
-		Assert.fail("NOT IMPLEMENTED YET");
+	public void whenUpdateNetwork_thenCorrect() throws Exception {
+		Capture<OFMessage> wc1 = new Capture<OFMessage>(CaptureType.ALL); // VoteLock:
+																			// Bundle
+																			// Open
+		Capture<OFMessage> wc2 = new Capture<OFMessage>(CaptureType.ALL); // VoteLock:
+																			// FlowMod
+		Capture<OFMessage> wc3 = new Capture<OFMessage>(CaptureType.ALL); // VoteLock:
+																			// FlowMod
+																			// Update
+		Capture<OFMessage> wc4 = new Capture<OFMessage>(CaptureType.ALL); // VoteLock:
+																			// Bundle
+																			// Commit
+		Capture<OFMessage> wc5 = new Capture<OFMessage>(CaptureType.ALL); // Commit:
+																			// Commit
+
+		IOFSwitch switch1 = createMock(IOFSwitch.class);
+		expect(switch1.getId()).andReturn(this.testSwitch1.getId()).anyTimes();
+		expect(switch1.getBuffers()).andReturn((long) 100).anyTimes();
+		expect(switch1.write(EasyMock.capture(wc1))).andReturn(true).once();
+		expect(switch1.write(EasyMock.capture(wc2))).andReturn(true).once();
+		expect(switch1.write(EasyMock.capture(wc3))).andReturn(true).once();
+		expect(switch1.write(EasyMock.capture(wc4))).andReturn(true).once();
+		expect(switch1.write(EasyMock.capture(wc5))).andReturn(true).once();
+		replay(switch1);
+
+		OFFactoryVer14 factory = new OFFactoryVer14();
+		UpdateID testID = new UpdateID(3);
+		Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods = new HashMap<>();
+		OFFlowAdd updateMsg = this.testSPR.createFlowMod(testDTO1,
+				testID.toLong());
+		switchesAndFlowMods.put(switch1, updateMsg);
+		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
+		affectedSwitches.add(switch1);
+		List<MessagePair> messages = new ArrayList<>();
+		OFMessage confimMsg = factory.buildBundleCtrlMsg()
+				.setBundleCtrlType(OFBundleCtrlType.COMMIT_REPLY)
+				.setXid(testID.toLong())
+				.setBundleId(BundleId.of(0)).build();
+		OFMessage finishMsg = factory.errorMsgs().buildFlowModFailedErrorMsg()
+				.setXid(testID.toLong()).setCode(OFFlowModFailedCode.UNKNOWN)
+				.build();
+		messages.add(new MessagePair(switch1, confimMsg));
+		messages.add(new MessagePair(switch1, finishMsg));
+
+		try {
+			List<IOFSwitch> unfinishedSwitches = this.testSPR.updateNetwork(this.testUpdaterService,
+					switchesAndFlowMods, affectedSwitches, messages, testID);
+			
+			Assert.assertEquals(0, unfinishedSwitches.size());
+			testIfWCsAreFullVoteLock(wc1, wc2, wc3, wc4, testID.toLong(),
+					updateMsg);
+			testIfWCIsASPCommit(wc5, testID.toLong());
+		} catch (InterruptedException e) {
+			System.out.println("Encountered Interrupt during Update: " + e.getMessage());
+			e.printStackTrace();
+		} catch (Exception e) {
+			System.out.println("Encountered Exception during Update: " + e.getMessage());
+			e.printStackTrace();
+		}
+
 	}
 
-	@Test
-	public void whenGetAffectedSwitchesAndGetMessagesAndUpdateNetwork_thenCorrect() {
-		// this.testSPR.getAffectedSwitchesAndGetMessagesAndUpdateNetwork(switchService,
-		// updateService, switchesAndFlowMods, updateID)
-		Assert.fail("NOT IMPLEMENTED YET!");
+	public void testIfWCsAreFullVoteLock(Capture<OFMessage> wcOpen,
+			Capture<OFMessage> wcFlowMod, Capture<OFMessage> wcUpdate,
+			Capture<OFMessage> wcBundleCommit, long xid, OFFlowMod update) {
+		BundleId bundleID = null;
+
+		// check open
+		bundleID = testWCBundleCtrl(wcOpen, OFBundleCtrlType.OPEN_REQUEST, xid,
+				bundleID);
+
+		// check flowmod
+		testWCBundleAdd(wcFlowMod, OFFlowModCommand.MODIFY_STRICT, xid,
+				bundleID);
+
+		// check Update
+		testWCBundleAdd(wcUpdate, OFFlowModCommand.ADD, xid, bundleID);
+
+		// check bundle commit
+		testWCBundleCtrl(wcBundleCommit, OFBundleCtrlType.COMMIT_REQUEST, xid,
+				bundleID);
 	}
 
-	@Test
-	public void whenGetMessagesAndUpdateNetwork_thenCorrect() {
-		// this.testSPR.getMessagesAndUpdateNetwork(updateService,
-		// switchesAndFlowMods, affectedSwitches, updateID)
-		Assert.fail("NOT IMPLEMENTED YET!");
+	public BundleId testWCBundleCtrl(Capture<OFMessage> wc,
+			OFBundleCtrlType type, long xid, BundleId bundleID) {
+		BundleId result = null;
+
+		Assert.assertTrue(wc.hasCaptured());
+		Assert.assertTrue(wc.getValue() instanceof OFBundleCtrlMsg);
+		OFBundleCtrlMsg ctrlMsg = (OFBundleCtrlMsg) wc.getValue();
+		Assert.assertEquals(xid, ctrlMsg.getXid());
+		if (bundleID == null) {
+			result = ctrlMsg.getBundleId();
+		} else {
+			Assert.assertEquals(bundleID, ctrlMsg.getBundleId());
+		}
+		Assert.assertEquals(type, ctrlMsg.getBundleCtrlType());
+
+		return result;
 	}
 
-	@Test
-	public void whenUpdateNetwork_thenCorrect() {
-		// this.testSPR.updateNetwork(updateService, switchesAndFlowMods,
-		// affectedSwitches, messages);
-		Assert.fail("NOT IMPLEMENTED YET!");
+	public void testWCBundleAdd(Capture<OFMessage> wc, OFFlowModCommand cmd,
+			long xid, BundleId bundleID) {
+		Assert.assertTrue(wc.hasCaptured());
+		Assert.assertTrue(wc.getValue() instanceof OFBundleAddMsg);
+		OFBundleAddMsg addMsg = (OFBundleAddMsg) wc.getValue();
+		Assert.assertEquals(xid, addMsg.getXid());
+
+		Assert.assertEquals(bundleID, addMsg.getBundleId());
+
+		Assert.assertTrue(addMsg.getData() instanceof OFFlowMod);
+		OFFlowMod flowmod = (OFFlowMod) addMsg.getData();
+		Assert.assertEquals(xid, flowmod.getXid());
+		Assert.assertEquals(cmd, flowmod.getCommand());
+	}
+
+	public void testIfWCIsASPCommit(Capture<OFMessage> wcASPCommit, long xid) {
+		Assert.assertTrue(wcASPCommit.hasCaptured());
+		Assert.assertTrue(wcASPCommit.getValue() instanceof OFFlowMod);
+		OFFlowMod commit1 = (OFFlowMod) wcASPCommit.getValue();
+		Assert.assertEquals(xid, commit1.getXid());
+		Assert.assertEquals(OFFlowModCommand.DELETE, commit1.getCommand());
 	}
 
 	@Test
@@ -151,7 +250,8 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		try {
 			List<IOFSwitch> unconfirmedSwitches = this.testSPR
 					.executeFirstPhase(this.testUpdaterService,
-							affectedSwitches, switchesAndFlowMods, messages, testID);
+							affectedSwitches, switchesAndFlowMods, messages,
+							testID);
 
 			Assert.assertEquals(1, unconfirmedSwitches.size());
 			Assert.assertTrue(unconfirmedSwitches.contains(testSwitch2));
@@ -176,19 +276,20 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		affectedSwitches.add(testSwitch2);
 
 		List<MessagePair> messages = new ArrayList<>();
-		OFMessage finishMsg = factory.buildBundleCtrlMsg()
+		OFMessage confimMsg = factory.buildBundleCtrlMsg()
 				.setBundleCtrlType(OFBundleCtrlType.COMMIT_REPLY)
 				.setBundleId(BundleId.of(0)).build();
 		OFMessage rejectMsg = factory.errorMsgs().buildBundleFailedErrorMsg()
 				.setCode(OFBundleFailedCode.MSG_FAILED).setXid(testID.toLong())
 				.build();
-		messages.add(new MessagePair(testSwitch1, finishMsg));
+		messages.add(new MessagePair(testSwitch1, confimMsg));
 		messages.add(new MessagePair(testSwitch2, rejectMsg));
 
 		try {
 			List<IOFSwitch> unconfirmedSwitches = this.testSPR
 					.executeFirstPhase(this.testUpdaterService,
-							affectedSwitches, switchesAndFlowMods, messages, testID);
+							affectedSwitches, switchesAndFlowMods, messages,
+							testID);
 
 			Assert.assertEquals(1, unconfirmedSwitches.size());
 			Assert.assertTrue(unconfirmedSwitches.contains(testSwitch2));
@@ -202,7 +303,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	public void whenExecuteSecondPhase_thenCorrect1() {
 		Capture<OFMessage> wc1 = new Capture<OFMessage>(CaptureType.ALL);
 		Capture<OFMessage> wc2 = new Capture<OFMessage>(CaptureType.ALL);
-		
+
 		IOFSwitch commitSwitch = createMock(IOFSwitch.class);
 		expect(commitSwitch.getId()).andReturn(DatapathId.of(1L)).anyTimes();
 		expect(commitSwitch.getBuffers()).andReturn((long) 100).anyTimes();
@@ -235,7 +336,8 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		try {
 			List<IOFSwitch> unfinishedSwitches = this.testSPR
 					.executeSecondPhase(this.testUpdaterService,
-							affectedSwitches, unconfirmedSwitches, messages, testID);
+							affectedSwitches, unconfirmedSwitches, messages,
+							testID);
 
 			Assert.assertEquals(1, unfinishedSwitches.size());
 			Assert.assertTrue(unfinishedSwitches.contains(unresponsiveSwitch));
@@ -296,7 +398,8 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		try {
 			List<IOFSwitch> unfinishedSwitches = this.testSPR
 					.executeSecondPhase(this.testUpdaterService,
-							affectedSwitches, unconfirmedSwitches, messages, testID);
+							affectedSwitches, unconfirmedSwitches, messages,
+							testID);
 
 			Assert.assertEquals(null, unfinishedSwitches);
 
