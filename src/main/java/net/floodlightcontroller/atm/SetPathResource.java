@@ -297,7 +297,8 @@ public class SetPathResource extends ServerResource {
 				|| flowModDTO.outPort == FlowModDTO.INT_DEFAULT) {
 			return null;
 		} else {
-			TableId tableID = TableId.of(255);
+			//TODO: TableID = 49 does this work?
+			TableId tableID = TableId.of(49);
 			int inPort = flowModDTO.inPort;
 			int outPort = flowModDTO.outPort;
 
