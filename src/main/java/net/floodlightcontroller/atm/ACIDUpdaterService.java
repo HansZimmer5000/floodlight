@@ -84,18 +84,21 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 		BundleId currentBundleId;
 		long currentXid;
 		OFMessage currentOpenBundle, currentLock, currentLockBundle, currentUpdate, currentUpdateBundle, currentCommitBundle;
-
+		ArrayList<OFMessage> currentMessages;
+		
 		for (IOFSwitch currentSwitch : switchesAndFlowMods.keySet()) {
 			currentBundleId = this.bundleIdGenerator.nextBundleId();
 			currentUpdate = switchesAndFlowMods.get(currentSwitch);
 			currentXid = currentUpdate.getXid();
+			
+			currentMessages = new ArrayList<>();
 
 			// OFPBCT_OPEN_REQUEST
 			OFBundleCtrlType ctrOpentype = OFBundleCtrlType.OPEN_REQUEST;
 			currentOpenBundle = this.FACTORY.buildBundleCtrlMsg()
 					.setBundleCtrlType(ctrOpentype)
 					.setBundleId(currentBundleId).setXid(currentXid).build();
-			currentSwitch.write(currentOpenBundle);
+			currentMessages.add(currentOpenBundle);
 
 			// OFPT_FLOW_MOD + OFPFC_MODIFY_STRICT TableId=255
 			currentLock = this.FACTORY.buildFlowModifyStrict()
@@ -103,21 +106,22 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 			currentLockBundle = this.FACTORY.buildBundleAddMsg()
 					.setBundleId(currentBundleId).setData(currentLock)
 					.setXid(currentXid).build();
-			currentSwitch.write(currentLockBundle);
+			currentMessages.add(currentLockBundle);
 
 			// Update
 			currentUpdateBundle = this.FACTORY.buildBundleAddMsg()
 					.setBundleId(currentBundleId).setData(currentUpdate)
 					.setXid(currentXid).build();
-			currentSwitch.write(currentUpdateBundle);
+			currentMessages.add(currentUpdateBundle);
 
 			// OFPBCT_COMMIT_REQUEST
 			OFBundleCtrlType ctrCommitType = OFBundleCtrlType.COMMIT_REQUEST;
 			currentCommitBundle = this.FACTORY.buildBundleCtrlMsg()
 					.setBundleCtrlType(ctrCommitType)
 					.setBundleId(currentBundleId).setXid(currentXid).build();
-			currentSwitch.write(currentCommitBundle);
+			currentMessages.add(currentCommitBundle);
 
+			currentSwitch.write(currentMessages);
 		}
 	}
 
