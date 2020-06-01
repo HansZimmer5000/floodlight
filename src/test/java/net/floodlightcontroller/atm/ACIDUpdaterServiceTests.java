@@ -232,10 +232,11 @@ public class ACIDUpdaterServiceTests extends FloodlightTestCase {
         
         assertTrue(wc1.hasCaptured());
 		Assert.assertTrue(wc1.getValue() instanceof OFFlowMod);
-		OFFlowMod commit1 = (OFFlowMod) wc1.getValue();
-		Assert.assertEquals(testID.toLong(), commit1.getXid());
+		OFFlowMod rollback = (OFFlowMod) wc1.getValue();
+		Assert.assertEquals(testID.toLong(), rollback.getXid());
 		Assert.assertEquals(OFFlowModCommand.DELETE_STRICT,
-				commit1.getCommand());
+				rollback.getCommand());
+		Assert.assertEquals(65535, rollback.getPriority());
 	}
 
 	@Test
@@ -259,6 +260,7 @@ public class ACIDUpdaterServiceTests extends FloodlightTestCase {
 		Assert.assertEquals(testID.toLong(), commit1.getXid());
 		Assert.assertEquals(OFFlowModCommand.DELETE,
 				commit1.getCommand());
+		Assert.assertEquals(65535, commit1.getPriority());
 	}
 
 	@Test

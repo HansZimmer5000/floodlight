@@ -129,7 +129,7 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 
 		for (IOFSwitch currentSwitch : switches) {
 			currentMsg = this.FACTORY.buildFlowDeleteStrict()
-					.setTableId(this.ASP_TABLE_ID).setXid(xid).build();
+					.setTableId(this.ASP_TABLE_ID).setXid(xid).setPriority(65535).build();
 			currentSwitch.write(currentMsg);
 		}
 	}
@@ -142,7 +142,7 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 
 		for (IOFSwitch currentSwitch : switches) {
 			currentMsg = this.FACTORY.buildFlowDelete().setXid(xid)
-					.setTableId(this.ASP_TABLE_ID).build();
+					.setTableId(this.ASP_TABLE_ID).setPriority(65535).build();
 			currentSwitch.write(currentMsg);
 		}
 	}
