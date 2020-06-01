@@ -43,13 +43,13 @@ public class SetPathResource extends ServerResource {
 
 	@Put
 	public String SetPath(String jsonBody) {
-		log.debug("SetPathReceived:" + jsonBody);
+		log.error("SetPathReceived:" + jsonBody);
 		prepareUpdate(jsonBody);
 
 		Header dry_run = this.getRequest().getHeaders().getFirst("dry_run");
 		if (null != dry_run) {
 			// dry run
-			log.debug("DryRun");
+			log.error("DryRun");
 
 			if (this._flowModDTOs.size() == 0) {
 				System.out.println(jsonBody);
@@ -72,6 +72,12 @@ public class SetPathResource extends ServerResource {
 
 					ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>(
 							this._switchesAndFlowMods.keySet());
+					
+					log.error("Affected Switch states");
+					for (IOFSwitch d : affectedSwitches){
+						log.error(d.getStatus().toString());
+						log.error(String.valueOf(d.getStatus().isControllable()));
+					}
 
 					List<MessagePair> messages = this._updateService
 							.getMessages(this._updateID);
@@ -91,27 +97,27 @@ public class SetPathResource extends ServerResource {
 								}
 							}
 						} catch (InterruptedException e) {
-							log.debug("Encountered Interrupt during Update: "
+							log.error("Encountered Interrupt during Update: "
 									+ e.getMessage());
 							message = e.getMessage();
 						} catch (Exception e) {
-							log.debug("Encountered Exception during Update: "
+							log.error("Encountered Exception during Update: "
 									+ e.getMessage());
 							message = e.getMessage();
 						}
 						status = Status.SUCCESS_NO_CONTENT;
 					} else {
-						log.debug("Received message array was null");
+						log.error("Received message array was null");
 						message = "Received message array was null";
 						status = Status.SERVER_ERROR_INTERNAL;
 					}
 				} else {
-					log.debug("FlowModDTOs size was not equal to switchesAndFlowMods. Are there duplicates in DTOs or switch dpids that are not existent?");
+					log.error("FlowModDTOs size was not equal to switchesAndFlowMods. Are there duplicates in DTOs or switch dpids that are not existent?");
 					message = "FlowModDTOs size was not equal to switchesAndFlowMods. Are there duplicates in DTOs or switch dpids that are not existent?";
 					status = Status.CLIENT_ERROR_NOT_FOUND;
 				}
 			} else {
-				log.debug("FlowMods could not be created fully");
+				log.error("FlowMods could not be created fully");
 				message = "FlowMods could not be created fully";
 				status = Status.CLIENT_ERROR_BAD_REQUEST;
 			}
@@ -187,7 +193,7 @@ public class SetPathResource extends ServerResource {
 			readySwitches.removeAll(unconfirmedSwitches);
 
 			updateService.rollback(readySwitches, updateID.toLong());
-			log.debug("Rolledback");
+			log.error("Rolledback");
 		} else {
 			// Commit
 			updateService.commit(affectedSwitches, updateID.toLong());
@@ -197,7 +203,7 @@ public class SetPathResource extends ServerResource {
 
 			unfinishedSwitches = getUnfinishedSwitches(messages,
 					affectedSwitches);
-			log.debug("Encountered " + unfinishedSwitches.size()
+			log.error("Encountered " + unfinishedSwitches.size()
 					+ " unfinished Switches: " + unfinishedSwitches.toString());
 		}
 		return unfinishedSwitches;
@@ -249,7 +255,7 @@ public class SetPathResource extends ServerResource {
 					&& currentMessage.toString().contains("OFBundleCtrlMsg")) {
 				elemIsRemoved = unconfirmedSwitches.remove(messageSwitch);
 				if (!elemIsRemoved) {
-					log.debug("Confirmed Switch could not be removed: "
+					log.error("Confirmed Switch could not be removed: "
 							+ messageSwitch.getId().toString());
 				}
 			}
@@ -273,7 +279,7 @@ public class SetPathResource extends ServerResource {
 							"OFFlowModFailedErrorMsg")) {
 				elemIsRemoved = unfinishedSwitches.remove(messageSwitch);
 				if (!elemIsRemoved) {
-					log.debug("Finished Switch could not be removed: "
+					log.error("Finished Switch could not be removed: "
 							+ messageSwitch.getId().toString());
 				}
 			}
@@ -317,7 +323,7 @@ public class SetPathResource extends ServerResource {
 					new TypeReference<ArrayList<FlowModDTO>>() {
 					});
 		} catch (Exception e) {
-			log.debug(e.getMessage());
+			log.error(e.getMessage());
 		}
 		return result;
 	}
