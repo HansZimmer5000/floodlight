@@ -43,13 +43,13 @@ public class SetPathResource extends ServerResource {
 
 	@Put
 	public String SetPath(String jsonBody) {
-		log.error("SetPathReceived:" + jsonBody);
+		log.error("My: SetPathReceived:" + jsonBody);
 		prepareUpdate(jsonBody);
 
 		Header dry_run = this.getRequest().getHeaders().getFirst("dry_run");
 		if (null != dry_run) {
 			// dry run
-			log.error("DryRun");
+			log.error("My: DryRun");
 
 			if (this._flowModDTOs.size() == 0) {
 				System.out.println(jsonBody);
@@ -65,59 +65,66 @@ public class SetPathResource extends ServerResource {
 
 			// TODO Refactor, May move more code to "prepareUpdate"
 			// TODO Refactor, May make more use of class & public field
-			// structure!s
+			// structures
 			if (this._switchesAndFlowMods != null) {
 				if (this._flowModDTOs.size() == this._switchesAndFlowMods
 						.size()) {
 
 					ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>(
 							this._switchesAndFlowMods.keySet());
-					
-					log.error("Affected Switch states");
-					for (IOFSwitch d : affectedSwitches){
-						log.error(d.getStatus().toString());
-						log.error(String.valueOf(d.getStatus().isControllable()));
-					}
+
+					log.error("My: Affected Switch states");
 
 					List<MessagePair> messages = this._updateService
 							.getMessages(this._updateID);
 					if (messages != null) {
 						// Update
 						try {
-							List<IOFSwitch> unfinishedSwitches = updateNetwork(this._updateService,
+							log.error("My: Starting to update network");
+							List<IOFSwitch> unfinishedSwitches = updateNetwork(
+									this._updateService,
 									this._switchesAndFlowMods,
 									affectedSwitches, messages, this._updateID);
-							
-							if (unfinishedSwitches.size() > 0){
+							log.error("My: Updated network");
+							if (unfinishedSwitches == null){
+								log.error("My: Update rolledback");
+							}
+							else if (unfinishedSwitches.size() == 0) {
+								status = Status.SUCCESS_NO_CONTENT;
+							} else {
 								status = Status.SERVER_ERROR_INTERNAL;
 								message = "There are unfinished Switches: ";
-								for (IOFSwitch sw : unfinishedSwitches){
+								for (IOFSwitch sw : unfinishedSwitches) {
 									message += sw.getId().toString();
 									message += " ";
 								}
 							}
+							log.error("My: Checked unfinished Switches");
 						} catch (InterruptedException e) {
-							log.error("Encountered Interrupt during Update: "
+							log.error("My: Encountered Interrupt during Update: "
 									+ e.getMessage());
 							message = e.getMessage();
+							status = Status.SERVER_ERROR_INTERNAL;
 						} catch (Exception e) {
-							log.error("Encountered Exception during Update: "
+							log.error("My: Encountered Exception ("+e.getClass()+") during Update: "
 									+ e.getMessage());
-							message = e.getMessage();
+							// TODO: e.printStackTrace();
+							message = e.toString();
+							e.printStackTrace();
+							status = Status.SERVER_ERROR_INTERNAL;
 						}
-						status = Status.SUCCESS_NO_CONTENT;
 					} else {
-						log.error("Received message array was null");
+						log.error("My: Received message array was null");
 						message = "Received message array was null";
 						status = Status.SERVER_ERROR_INTERNAL;
 					}
 				} else {
-					log.error("FlowModDTOs size was not equal to switchesAndFlowMods. Are there duplicates in DTOs or switch dpids that are not existent?");
+					log.error("My: FlowModDTOs size was not equal to switchesAndFlowMods. Are there duplicates in DTOs or switch dpids that are not existent?");
 					message = "FlowModDTOs size was not equal to switchesAndFlowMods. Are there duplicates in DTOs or switch dpids that are not existent?";
 					status = Status.CLIENT_ERROR_NOT_FOUND;
 				}
 			} else {
-				log.error("FlowMods could not be created fully");
+				log.error("My: FlowMods could not be created fully");
 				message = "FlowMods could not be created fully";
 				status = Status.CLIENT_ERROR_BAD_REQUEST;
 			}
@@ -161,8 +168,8 @@ public class SetPathResource extends ServerResource {
 
 		// Rollback or Commit + wait for finishes
 		// List<IOFSwitch> unfinishedSwitches =
-		List<IOFSwitch> unfinished = executeSecondPhase(updateService, affectedSwitches,
-				unconfirmedSwitches, messages, updateID);
+		List<IOFSwitch> unfinished = executeSecondPhase(updateService,
+				affectedSwitches, unconfirmedSwitches, messages, updateID);
 		return unfinished;
 	}
 
@@ -171,10 +178,13 @@ public class SetPathResource extends ServerResource {
 			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods,
 			List<MessagePair> messages, UpdateID updateID)
 			throws InterruptedException {
+		log.error("My: Starting First Phase");
 		updateService.voteLock(switchesAndFlowMods);
 		Thread.sleep(ASP_TIMEOUT_MS);// TODO how long to wait? Or actively check
 		// whats inside messages?
 
+		log.error("My: Checking received messages");
+		log.error(messages.toString());
 		List<IOFSwitch> unconfirmedSwitches = getUnconfirmedSwitches(messages,
 				affectedSwitches);
 		return unconfirmedSwitches;
@@ -185,16 +195,20 @@ public class SetPathResource extends ServerResource {
 			ArrayList<IOFSwitch> affectedSwitches,
 			List<IOFSwitch> unconfirmedSwitches, List<MessagePair> messages,
 			UpdateID updateID) throws InterruptedException {
+		log.error("My: Starting Second Phase");
 
 		List<IOFSwitch> unfinishedSwitches = null;
 		if (unconfirmedSwitches.size() > 0) {
+			log.error("My: Rolling Back");
+			log.error(unconfirmedSwitches.toString());
 			// Rollback
 			List<IOFSwitch> readySwitches = new ArrayList<>(affectedSwitches);
 			readySwitches.removeAll(unconfirmedSwitches);
 
 			updateService.rollback(readySwitches, updateID.toLong());
-			log.error("Rolledback");
+			log.error("My: Rolledback");
 		} else {
+			log.error("My: Committing");
 			// Commit
 			updateService.commit(affectedSwitches, updateID.toLong());
 			Thread.sleep(FINISH_TIMEOUT_MS); // TODO how long to wait? Or
@@ -203,7 +217,7 @@ public class SetPathResource extends ServerResource {
 
 			unfinishedSwitches = getUnfinishedSwitches(messages,
 					affectedSwitches);
-			log.error("Encountered " + unfinishedSwitches.size()
+			log.error("My: Encountered " + unfinishedSwitches.size()
 					+ " unfinished Switches: " + unfinishedSwitches.toString());
 		}
 		return unfinishedSwitches;
@@ -255,7 +269,7 @@ public class SetPathResource extends ServerResource {
 					&& currentMessage.toString().contains("OFBundleCtrlMsg")) {
 				elemIsRemoved = unconfirmedSwitches.remove(messageSwitch);
 				if (!elemIsRemoved) {
-					log.error("Confirmed Switch could not be removed: "
+					log.error("My: Confirmed Switch could not be removed: "
 							+ messageSwitch.getId().toString());
 				}
 			}
@@ -279,7 +293,7 @@ public class SetPathResource extends ServerResource {
 							"OFFlowModFailedErrorMsg")) {
 				elemIsRemoved = unfinishedSwitches.remove(messageSwitch);
 				if (!elemIsRemoved) {
-					log.error("Finished Switch could not be removed: "
+					log.error("My: Finished Switch could not be removed: "
 							+ messageSwitch.getId().toString());
 				}
 			}
@@ -297,7 +311,7 @@ public class SetPathResource extends ServerResource {
 				|| flowModDTO.outPort == FlowModDTO.INT_DEFAULT) {
 			return null;
 		} else {
-			//TODO: TableID = 49 does this work?
+			// TODO: TableID = 49 does this work?
 			TableId tableID = TableId.of(49);
 			int inPort = flowModDTO.inPort;
 			int outPort = flowModDTO.outPort;
