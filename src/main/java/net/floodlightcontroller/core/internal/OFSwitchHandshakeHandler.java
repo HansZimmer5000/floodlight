@@ -27,6 +27,7 @@ import org.projectfloodlight.openflow.protocol.OFActionType;
 import org.projectfloodlight.openflow.protocol.OFBadRequestCode;
 import org.projectfloodlight.openflow.protocol.OFBarrierReply;
 import org.projectfloodlight.openflow.protocol.OFBarrierRequest;
+import org.projectfloodlight.openflow.protocol.OFBundleCtrlMsg;
 import org.projectfloodlight.openflow.protocol.OFControllerRole;
 import org.projectfloodlight.openflow.protocol.OFDescStatsReply;
 import org.projectfloodlight.openflow.protocol.OFDescStatsRequest;
@@ -862,6 +863,11 @@ public class OFSwitchHandshakeHandler implements IOFConnectionListener {
 				break;
 			case EXPERIMENTER:
 				processOFExperimenter((OFExperimenter) m);
+				break;
+			case BUNDLE_CONTROL:
+				OFBundleCtrlMsg d = (OFBundleCtrlMsg) m;
+				log.error("My: Received Bundle Control: " + d.getBundleCtrlType().toString());
+				dispatchMessage(m);
 				break;
 			default:
 				illegalMessageReceived(m);
