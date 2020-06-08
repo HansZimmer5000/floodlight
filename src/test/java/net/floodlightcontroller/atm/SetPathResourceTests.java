@@ -17,12 +17,10 @@ import org.junit.Test;
 import org.projectfloodlight.openflow.protocol.OFBundleAddMsg;
 import org.projectfloodlight.openflow.protocol.OFBundleCtrlMsg;
 import org.projectfloodlight.openflow.protocol.OFBundleCtrlType;
-import org.projectfloodlight.openflow.protocol.OFBundleFailedCode;
 import org.projectfloodlight.openflow.protocol.OFFactories;
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
 import org.projectfloodlight.openflow.protocol.OFFlowMod;
 import org.projectfloodlight.openflow.protocol.OFFlowModCommand;
-import org.projectfloodlight.openflow.protocol.OFFlowModFailedCode;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFVersion;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
@@ -32,10 +30,8 @@ import org.projectfloodlight.openflow.protocol.ver14.OFFactoryVer14;
 import org.projectfloodlight.openflow.types.BundleId;
 import org.projectfloodlight.openflow.types.DatapathId;
 import org.projectfloodlight.openflow.types.EthType;
-import org.restlet.Context;
-import org.restlet.Request;
-import org.restlet.resource.ServerResource;
 
+import net.floodlightcontroller.atm.IACIDUpdaterService.ASPSwitchStates;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.test.FloodlightTestCase;
 
@@ -64,8 +60,8 @@ public class SetPathResourceTests extends FloodlightTestCase {
 			+ "\",\n" + "\"inPort\": \"" + String.valueOf(testInPort) + "\",\n"
 			+ "\"outPort\":      \"" + String.valueOf(testOutPort) + "\"\n"
 			+ "";
-	private FlowModDTO testDTO1 = new FlowModDTO("ab", "testName", 0, 1);
-	private FlowModDTO testDTO2 = new FlowModDTO("ab:cd", "testName", 1, 6);
+	private FlowModDTO testDTO1 = new FlowModDTO(testDPID1, "testName", 0, 1);
+	private FlowModDTO testDTO2 = new FlowModDTO(testDPID2, "testName", 1, 6);
 	private IOFSwitch testSwitch1;
 	private IOFSwitch testSwitch2;
 	private final String testMessagesRaw = "[" + testJson1 + "," + testJson2
@@ -128,7 +124,6 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		expect(switch1.write(EasyMock.capture(wc5))).andReturn(true).once();
 		replay(switch1);
 
-		OFFactoryVer14 factory = new OFFactoryVer14();
 		UpdateID testID = new UpdateID(3);
 		Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods = new HashMap<>();
 		OFFlowAdd updateMsg = this.testSPR.createFlowMod(testDTO1,
@@ -136,30 +131,28 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		switchesAndFlowMods.put(switch1, updateMsg);
 		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
 		affectedSwitches.add(switch1);
-		List<MessagePair> messages = new ArrayList<>();
-		OFMessage confimMsg = factory.buildBundleCtrlMsg()
-				.setBundleCtrlType(OFBundleCtrlType.COMMIT_REPLY)
-				.setXid(testID.toLong())
-				.setBundleId(BundleId.of(0)).build();
-		OFMessage finishMsg = factory.errorMsgs().buildFlowModFailedErrorMsg()
-				.setXid(testID.toLong()).setCode(OFFlowModFailedCode.UNKNOWN)
-				.build();
-		messages.add(new MessagePair(switch1, confimMsg));
-		messages.add(new MessagePair(switch1, finishMsg));
+		HashMap<IOFSwitch, ASPSwitchStates> states = new HashMap<>();
+		states.put(switch1, ASPSwitchStates.FINISHED); 
 
 		try {
-			List<IOFSwitch> unfinishedSwitches = this.testSPR.updateNetwork(this.testUpdaterService,
-					switchesAndFlowMods, affectedSwitches, messages, testID);
-			
+			// FAILS AS mock is not suited for writing messages as list
+			this.testSPR._updateService = this.testUpdaterService;
+			this.testSPR._switchesAndFlowMods = switchesAndFlowMods;
+			this.testSPR._switchStates = states;
+			this.testSPR._updateID = testID;
+			List<IOFSwitch> unfinishedSwitches = this.testSPR.updateNetwork();
+
 			Assert.assertEquals(0, unfinishedSwitches.size());
 			testIfWCsAreFullVoteLock(wc1, wc2, wc3, wc4, testID.toLong(),
 					updateMsg);
 			testIfWCIsASPCommit(wc5, testID.toLong());
 		} catch (InterruptedException e) {
-			System.out.println("Encountered Interrupt during Update: " + e.getMessage());
+			System.out.println("Encountered Interrupt during Update: "
+					+ e.getMessage());
 			e.printStackTrace();
 		} catch (Exception e) {
-			System.out.println("Encountered Exception during Update: " + e.getMessage());
+			System.out.println("Encountered Exception during Update: "
+					+ e.getMessage());
 			e.printStackTrace();
 		}
 
@@ -241,17 +234,18 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		affectedSwitches.add(testSwitch1);
 		affectedSwitches.add(testSwitch2);
 
-		List<MessagePair> messages = new ArrayList<>();
-		OFMessage finishMsg = factory.buildBundleCtrlMsg()
-				.setBundleCtrlType(OFBundleCtrlType.COMMIT_REPLY)
-				.setBundleId(BundleId.of(0)).build();
-		messages.add(new MessagePair(testSwitch1, finishMsg));
+		HashMap<IOFSwitch, ASPSwitchStates> states = new HashMap<>();
+		states.put(testSwitch1, ASPSwitchStates.CONFIRMED); 
+		states.put(testSwitch2, ASPSwitchStates.REJECTED); 
 
 		try {
+			this.testSPR._affectedSwitches = affectedSwitches;
+			this.testSPR._switchesAndFlowMods = switchesAndFlowMods;
+			this.testSPR._switchStates =  states;
+			this.testSPR._updateID = testID;
+			this.testSPR._updateService = testUpdaterService;
 			List<IOFSwitch> unconfirmedSwitches = this.testSPR
-					.executeFirstPhase(this.testUpdaterService,
-							affectedSwitches, switchesAndFlowMods, messages,
-							testID);
+					.executeFirstPhase();
 
 			Assert.assertEquals(1, unconfirmedSwitches.size());
 			Assert.assertTrue(unconfirmedSwitches.contains(testSwitch2));
@@ -263,7 +257,6 @@ public class SetPathResourceTests extends FloodlightTestCase {
 
 	@Test
 	public void whenExecuteFirstPhase_thenCorrect2() {
-		OFFactoryVer14 factory = new OFFactoryVer14();
 		UpdateID testID = new UpdateID(3);
 
 		Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods = new HashMap<>();
@@ -275,21 +268,18 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		affectedSwitches.add(testSwitch1);
 		affectedSwitches.add(testSwitch2);
 
-		List<MessagePair> messages = new ArrayList<>();
-		OFMessage confimMsg = factory.buildBundleCtrlMsg()
-				.setBundleCtrlType(OFBundleCtrlType.COMMIT_REPLY)
-				.setBundleId(BundleId.of(0)).build();
-		OFMessage rejectMsg = factory.errorMsgs().buildBundleFailedErrorMsg()
-				.setCode(OFBundleFailedCode.MSG_FAILED).setXid(testID.toLong())
-				.build();
-		messages.add(new MessagePair(testSwitch1, confimMsg));
-		messages.add(new MessagePair(testSwitch2, rejectMsg));
+		HashMap<IOFSwitch, ASPSwitchStates> states = new HashMap<>();
+		states.put(testSwitch1, ASPSwitchStates.CONFIRMED); 
+		states.put(testSwitch2, ASPSwitchStates.REJECTED);
 
 		try {
+			this.testSPR._affectedSwitches = affectedSwitches;
+			this.testSPR._switchesAndFlowMods = switchesAndFlowMods;
+			this.testSPR._switchStates =  states;
+			this.testSPR._updateID = testID;
+			this.testSPR._updateService = testUpdaterService;
 			List<IOFSwitch> unconfirmedSwitches = this.testSPR
-					.executeFirstPhase(this.testUpdaterService,
-							affectedSwitches, switchesAndFlowMods, messages,
-							testID);
+					.executeFirstPhase();
 
 			Assert.assertEquals(1, unconfirmedSwitches.size());
 			Assert.assertTrue(unconfirmedSwitches.contains(testSwitch2));
@@ -319,7 +309,6 @@ public class SetPathResourceTests extends FloodlightTestCase {
 				.once(); // expect Commit
 		replay(unresponsiveSwitch);
 
-		OFFactoryVer14 factory = new OFFactoryVer14();
 		UpdateID testID = new UpdateID(3);
 
 		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
@@ -327,17 +316,17 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		affectedSwitches.add(unresponsiveSwitch);
 
 		List<IOFSwitch> unconfirmedSwitches = new ArrayList<>();
-		List<MessagePair> messages = new ArrayList<>();
-		OFMessage finishMsg = factory.errorMsgs().buildFlowModFailedErrorMsg()
-				.setXid(testID.toLong()).setCode(OFFlowModFailedCode.UNKNOWN)
-				.build();
-		messages.add(new MessagePair(commitSwitch, finishMsg));
+		HashMap<IOFSwitch, ASPSwitchStates> states = new HashMap<>();
+		states.put(commitSwitch, ASPSwitchStates.FINISHED); 
+		states.put(unresponsiveSwitch, ASPSwitchStates.CONFIRMED); 
 
 		try {
+			this.testSPR._updateService = this.testUpdaterService;
+			this.testSPR._affectedSwitches = affectedSwitches;
+			this.testSPR._switchStates = states;
+			this.testSPR._updateID = testID;
 			List<IOFSwitch> unfinishedSwitches = this.testSPR
-					.executeSecondPhase(this.testUpdaterService,
-							affectedSwitches, unconfirmedSwitches, messages,
-							testID);
+					.executeSecondPhase(unconfirmedSwitches);
 
 			Assert.assertEquals(1, unfinishedSwitches.size());
 			Assert.assertTrue(unfinishedSwitches.contains(unresponsiveSwitch));
@@ -389,17 +378,16 @@ public class SetPathResourceTests extends FloodlightTestCase {
 
 		List<IOFSwitch> unconfirmedSwitches = new ArrayList<>();
 		unconfirmedSwitches.add(unconfirmedSwitch);
-		List<MessagePair> messages = new ArrayList<>();
-		OFMessage finishMsg = factory.errorMsgs().buildFlowModFailedErrorMsg()
-				.setXid(testID.toLong()).setCode(OFFlowModFailedCode.UNKNOWN)
-				.build();
-		messages.add(new MessagePair(rollbackSwitch, finishMsg));
+		HashMap<IOFSwitch, ASPSwitchStates> states = new HashMap<>();
+		states.put(testSwitch1, ASPSwitchStates.FINISHED); 
 
 		try {
+			this.testSPR._updateService = this.testUpdaterService;
+			this.testSPR._affectedSwitches = affectedSwitches;
+			this.testSPR._switchStates =  states;
+			this.testSPR._updateID = testID;
 			List<IOFSwitch> unfinishedSwitches = this.testSPR
-					.executeSecondPhase(this.testUpdaterService,
-							affectedSwitches, unconfirmedSwitches, messages,
-							testID);
+					.executeSecondPhase(unconfirmedSwitches);
 
 			Assert.assertEquals(null, unfinishedSwitches);
 
@@ -422,7 +410,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		mockSwitchManager = getMockSwitchService();
 		Assert.assertNotNull(mockSwitchManager);
 
-		byte atmID = UpdateID.createNewATMID();
+		long atmID = UpdateID.createNewATMID();
 		UpdateID updateID = new UpdateID(atmID);
 
 		ArrayList<FlowModDTO> flowModDTOs = new ArrayList<>();
@@ -455,45 +443,41 @@ public class SetPathResourceTests extends FloodlightTestCase {
 
 		testSwitch = this.testSPR
 				.getAffectedSwitch(mockSwitchManager, testDTO1);
-		Assert.assertEquals("00:00:00:00:00:00:00:" + testDTO1.dpid, testSwitch
-				.getId().toString());
+		Assert.assertEquals(testDPID1, testSwitch
+				.getId().toString().toUpperCase());
 
 		testSwitch = this.testSPR
 				.getAffectedSwitch(mockSwitchManager, testDTO2);
-		Assert.assertEquals("00:00:00:00:00:00:" + testDTO2.dpid, testSwitch
-				.getId().toString());
+		Assert.assertEquals(testDPID2, testSwitch
+				.getId().toString().toUpperCase());
 	}
 
 	@Test
 	public void whenGetUnconfirmedSwitches_thenCorrect1() throws Exception {
-		UpdateID testID = new UpdateID(3);
-		OFFactoryVer14 factory = new OFFactoryVer14();
-		OFMessage testMsg = factory.buildBundleCtrlMsg()
-				.setXid(testID.toLong())
-				.setBundleCtrlType(OFBundleCtrlType.COMMIT_REPLY)
-				.setBundleId(BundleId.of(0)).build();
+		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
+		affectedSwitches.add(this.testSwitch1);		
+		
+		HashMap<IOFSwitch, ASPSwitchStates> states = new HashMap<>();
+		states.put(testSwitch1, ASPSwitchStates.CONFIRMED); 
 
-		List<MessagePair> messages = new ArrayList<>();
-		List<IOFSwitch> affectedSwitches = new ArrayList<>();
-
-		messages.add(new MessagePair(this.testSwitch1, testMsg));
-		affectedSwitches.add(this.testSwitch1);
-
-		List<IOFSwitch> result = this.testSPR.getUnconfirmedSwitches(messages,
-				affectedSwitches);
+		this.testSPR._switchStates = states;
+		this.testSPR._affectedSwitches = affectedSwitches;
+		List<IOFSwitch> result = this.testSPR.getUnconfirmedSwitches();
 
 		Assert.assertEquals(0, result.size());
 	}
 
 	@Test
 	public void whenGetUnconfirmedSwitches_thenCorrect2() throws Exception {
-		List<MessagePair> messages = new ArrayList<>();
-		List<IOFSwitch> affectedSwitches = new ArrayList<>();
-
+		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
 		affectedSwitches.add(this.testSwitch1);
 
-		List<IOFSwitch> result = this.testSPR.getUnconfirmedSwitches(messages,
-				affectedSwitches);
+		HashMap<IOFSwitch, ASPSwitchStates> states = new HashMap<>();
+		states.put(testSwitch1, ASPSwitchStates.DEFAULT); 
+		
+		this.testSPR._switchStates = states;
+		this.testSPR._affectedSwitches = affectedSwitches;
+		List<IOFSwitch> result = this.testSPR.getUnconfirmedSwitches();
 
 		Assert.assertEquals(1, result.size());
 		Assert.assertEquals(this.testSwitch1, result.get(0));
@@ -501,21 +485,15 @@ public class SetPathResourceTests extends FloodlightTestCase {
 
 	@Test
 	public void whenGetUnconfirmedSwitches_thenCorrect3() throws Exception {
-		UpdateID testID = new UpdateID(3);
-		OFFactoryVer14 factory = new OFFactoryVer14();
-		OFMessage testMsg = factory.buildBundleCtrlMsg()
-				.setXid(testID.toLong())
-				.setBundleCtrlType(OFBundleCtrlType.CLOSE_REQUEST)
-				.setBundleId(BundleId.of(0)).build();
-
-		List<MessagePair> messages = new ArrayList<>();
-		List<IOFSwitch> affectedSwitches = new ArrayList<>();
-
-		messages.add(new MessagePair(this.testSwitch1, testMsg));
+		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
 		affectedSwitches.add(this.testSwitch1);
-
-		List<IOFSwitch> result = this.testSPR.getUnconfirmedSwitches(messages,
-				affectedSwitches);
+		
+		HashMap<IOFSwitch, ASPSwitchStates> states = new HashMap<>();
+		states.put(testSwitch1, ASPSwitchStates.REJECTED); 
+		
+		this.testSPR._switchStates = states;
+		this.testSPR._affectedSwitches = affectedSwitches;
+		List<IOFSwitch> result = this.testSPR.getUnconfirmedSwitches();
 
 		Assert.assertEquals(1, result.size());
 		Assert.assertEquals(this.testSwitch1, result.get(0));
@@ -523,33 +501,30 @@ public class SetPathResourceTests extends FloodlightTestCase {
 
 	@Test
 	public void whenGetUnfinishedSwitches_thenCorrect1() throws Exception {
-		UpdateID testID = new UpdateID(3);
-		OFFactoryVer14 factory = new OFFactoryVer14();
-		OFMessage testMsg = factory.errorMsgs().buildFlowModFailedErrorMsg()
-				.setXid(testID.toLong()).setCode(OFFlowModFailedCode.UNKNOWN)
-				.build();
-
-		List<MessagePair> messages = new ArrayList<>();
-		List<IOFSwitch> affectedSwitches = new ArrayList<>();
-
-		messages.add(new MessagePair(this.testSwitch1, testMsg));
+		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
 		affectedSwitches.add(this.testSwitch1);
 
-		List<IOFSwitch> result = this.testSPR.getUnfinishedSwitches(messages,
-				affectedSwitches);
+		HashMap<IOFSwitch, ASPSwitchStates> states = new HashMap<>();
+		states.put(testSwitch1, ASPSwitchStates.FINISHED); 
+		
+		this.testSPR._switchStates = states;
+		this.testSPR._affectedSwitches = affectedSwitches;
+		List<IOFSwitch> result = this.testSPR.getUnfinishedSwitches();
 
 		Assert.assertEquals(0, result.size());
 	}
 
 	@Test
 	public void whenGetUnfinishedSwitches_thenCorrect2() throws Exception {
-		List<MessagePair> messages = new ArrayList<>();
-		List<IOFSwitch> affectedSwitches = new ArrayList<>();
-
+		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
 		affectedSwitches.add(this.testSwitch1);
-
-		List<IOFSwitch> result = this.testSPR.getUnfinishedSwitches(messages,
-				affectedSwitches);
+		
+		HashMap<IOFSwitch, ASPSwitchStates> states = new HashMap<>();
+		states.put(testSwitch1, ASPSwitchStates.DEFAULT); 
+		
+		this.testSPR._switchStates = states;
+		this.testSPR._affectedSwitches = affectedSwitches;
+		List<IOFSwitch> result = this.testSPR.getUnfinishedSwitches();
 
 		Assert.assertEquals(1, result.size());
 		Assert.assertEquals(this.testSwitch1, result.get(0));
@@ -557,20 +532,15 @@ public class SetPathResourceTests extends FloodlightTestCase {
 
 	@Test
 	public void whenGetUnfinishedSwitches_thenCorrect3() throws Exception {
-		UpdateID testID = new UpdateID(3);
-		OFFactoryVer14 factory = new OFFactoryVer14();
-		OFMessage testMsg = factory.errorMsgs().buildFlowModFailedErrorMsg()
-				.setXid(testID.toLong())
-				.setCode(OFFlowModFailedCode.BAD_COMMAND).build();
-
-		List<MessagePair> messages = new ArrayList<>();
-		List<IOFSwitch> affectedSwitches = new ArrayList<>();
-
-		messages.add(new MessagePair(this.testSwitch1, testMsg));
+		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
 		affectedSwitches.add(this.testSwitch1);
-
-		List<IOFSwitch> result = this.testSPR.getUnfinishedSwitches(messages,
-				affectedSwitches);
+		
+		HashMap<IOFSwitch, ASPSwitchStates> states = new HashMap<>();
+		states.put(testSwitch1, ASPSwitchStates.CONFIRMED); 
+		
+		this.testSPR._switchStates = states;
+		this.testSPR._affectedSwitches = affectedSwitches;
+		List<IOFSwitch> result = this.testSPR.getUnfinishedSwitches();
 
 		Assert.assertEquals(1, result.size());
 		Assert.assertEquals(this.testSwitch1, result.get(0));
@@ -676,5 +646,12 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		Assert.assertEquals(inPort, match.get(MatchField.IN_PORT)
 				.getPortNumber());
 		Assert.assertEquals(EthType.IPv4, match.get(MatchField.ETH_TYPE));
+	}
+	
+	@Test
+	public void whenPrepareUpdate_thenCorrect(){
+		this.testSPR._switchService = this.mockSwitchManager;
+		this.testSPR._updateService = this.testUpdaterService;
+		this.testSPR.prepareUpdate(this.testMessagesRaw, true);
 	}
 }

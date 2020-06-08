@@ -4,7 +4,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
+import net.floodlightcontroller.atm.IACIDUpdaterService.ASPSwitchStates;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
 
@@ -40,11 +42,14 @@ public class SetPathResource extends ServerResource {
 	public Map<IOFSwitch, OFFlowAdd> _switchesAndFlowMods;
 	public IACIDUpdaterService _updateService;
 	public IOFSwitchService _switchService;
+	public ArrayList<IOFSwitch> _affectedSwitches;
+	public HashMap<IOFSwitch, IACIDUpdaterService.ASPSwitchStates> _switchStates;
 
 	@Put
 	public String SetPath(String jsonBody) {
 		log.error("My: SetPathReceived:" + jsonBody);
-		prepareUpdate(jsonBody);
+		prepareUpdate(jsonBody, false);
+		log.error("My: Update XID(" + this._updateID.toString() + ")");
 
 		Header dry_run = this.getRequest().getHeaders().getFirst("dry_run");
 		if (null != dry_run) {
@@ -52,7 +57,7 @@ public class SetPathResource extends ServerResource {
 			log.error("My: DryRun");
 
 			if (this._flowModDTOs.size() == 0) {
-				System.out.println(jsonBody);
+				log.error(jsonBody);
 			}
 
 			this.setStatus(Status.SUCCESS_OK);
@@ -66,30 +71,22 @@ public class SetPathResource extends ServerResource {
 			// TODO Refactor, May move more code to "prepareUpdate"
 			// TODO Refactor, May make more use of class & public field
 			// structures
+			System.out.println("My: " + this._switchStates.toString());
 			if (this._switchesAndFlowMods != null) {
 				if (this._flowModDTOs.size() == this._switchesAndFlowMods
 						.size()) {
 
-					ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>(
-							this._switchesAndFlowMods.keySet());
-
 					log.error("My: Affected Switch states");
 
-					List<MessagePair> messages = this._updateService
-							.getMessages(this._updateID);
-					if (messages != null) {
+					if (this._switchStates != null) {
 						// Update
 						try {
 							log.error("My: Starting to update network");
-							List<IOFSwitch> unfinishedSwitches = updateNetwork(
-									this._updateService,
-									this._switchesAndFlowMods,
-									affectedSwitches, messages, this._updateID);
+							List<IOFSwitch> unfinishedSwitches = updateNetwork();
 							log.error("My: Updated network");
-							if (unfinishedSwitches == null){
+							if (unfinishedSwitches == null) {
 								log.error("My: Update rolledback");
-							}
-							else if (unfinishedSwitches.size() == 0) {
+							} else if (unfinishedSwitches.size() == 0) {
 								status = Status.SUCCESS_NO_CONTENT;
 							} else {
 								status = Status.SERVER_ERROR_INTERNAL;
@@ -106,9 +103,9 @@ public class SetPathResource extends ServerResource {
 							message = e.getMessage();
 							status = Status.SERVER_ERROR_INTERNAL;
 						} catch (Exception e) {
-							log.error("My: Encountered Exception ("+e.getClass()+") during Update: "
+							log.error("My: Encountered Exception ("
+									+ e.getClass() + ") during Update: "
 									+ e.getMessage());
-							// TODO: e.printStackTrace();
 							message = e.toString();
 							e.printStackTrace();
 							status = Status.SERVER_ERROR_INTERNAL;
@@ -135,88 +132,92 @@ public class SetPathResource extends ServerResource {
 		}
 	}
 
-	public void prepareUpdate(String jsonBody) {
+	public void prepareUpdate(String jsonBody, boolean testRun) {
 		// Get Services
-		this._updateService = (IACIDUpdaterService) this.getContext()
-				.getAttributes()
-				.get(IACIDUpdaterService.class.getCanonicalName());
+		if (!testRun) {
+			// TODO Do not know how to mock this context, so for now only
+			// execute this part if not testRun
+			this._updateService = (IACIDUpdaterService) this.getContext()
+					.getAttributes()
+					.get(IACIDUpdaterService.class.getCanonicalName());
 
-		this._switchService = (IOFSwitchService) this.getContext()
-				.getAttributes().get(IOFSwitchService.class.getCanonicalName());
+			this._switchService = (IOFSwitchService) this.getContext()
+					.getAttributes()
+					.get(IOFSwitchService.class.getCanonicalName());
+		}
 
 		// Extract info from Request
 		this._flowModDTOs = convertJsonToDTO(jsonBody);
 
 		// Prepare Update
-		this._updateID = this._updateService
-				.createNewUpdateIDAndPrepareMessages();
+		this._updateID = this._updateService.createNewUpdateID();
 		this._switchesAndFlowMods = getSwitchesAndFlowMods(this._switchService,
 				this._flowModDTOs, this._updateID);
+
+		this._affectedSwitches = new ArrayList<>(
+				this._switchesAndFlowMods.keySet());
+		this._updateService.initXIDStates(this._updateID,
+				this._affectedSwitches);
+
+			
+		this._switchStates = this._updateService.getMessages(this._updateID);
 	}
 
-	public List<IOFSwitch> updateNetwork(IACIDUpdaterService updateService,
-			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods,
-			ArrayList<IOFSwitch> affectedSwitches, List<MessagePair> messages,
-			UpdateID updateID) throws InterruptedException {
-
-		// TODO control that every message that is send to the switches has
-		// correct xid!
+	public List<IOFSwitch> updateNetwork() throws InterruptedException {
+		log.error("My: UpdateNetwork with xid: " + this._updateID.toString());
 
 		// Vote Lock and wait for commits
-		List<IOFSwitch> unconfirmedSwitches = executeFirstPhase(updateService,
-				affectedSwitches, switchesAndFlowMods, messages, updateID);
+		List<IOFSwitch> unconfirmedSwitches = executeFirstPhase();
 
+		// State 1: No Answer - Do Nothing
+		// State 2: Rejected - Do Nothing
+		// State 3: Confirmed - Rollback (confirmed Switches) or Commit (confirmed Switches)
+		
 		// Rollback or Commit + wait for finishes
-		// List<IOFSwitch> unfinishedSwitches =
-		List<IOFSwitch> unfinished = executeSecondPhase(updateService,
-				affectedSwitches, unconfirmedSwitches, messages, updateID);
+		List<IOFSwitch> unfinished = executeSecondPhase(unconfirmedSwitches);
 		return unfinished;
 	}
 
-	public List<IOFSwitch> executeFirstPhase(IACIDUpdaterService updateService,
-			List<IOFSwitch> affectedSwitches,
-			Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods,
-			List<MessagePair> messages, UpdateID updateID)
-			throws InterruptedException {
-		log.error("My: Starting First Phase");
-		updateService.voteLock(switchesAndFlowMods);
+	public List<IOFSwitch> executeFirstPhase() throws InterruptedException {
+		log.error("My: Starting First Phase with xid: "
+				+ this._updateID.toString());
+		this._updateService.voteLock(this._switchesAndFlowMods);
 		Thread.sleep(ASP_TIMEOUT_MS);// TODO how long to wait? Or actively check
 		// whats inside messages?
 
-		log.error("My: Checking received messages");
-		log.error(messages.toString());
-		List<IOFSwitch> unconfirmedSwitches = getUnconfirmedSwitches(messages,
-				affectedSwitches);
+		log.error("My: Checking received messages of XID: "
+				+ this._updateID.toString() + "\n"
+				+ this._switchStates);
+		List<IOFSwitch> unconfirmedSwitches = getUnconfirmedSwitches();
 		return unconfirmedSwitches;
 	}
 
 	public List<IOFSwitch> executeSecondPhase(
-			IACIDUpdaterService updateService,
-			ArrayList<IOFSwitch> affectedSwitches,
-			List<IOFSwitch> unconfirmedSwitches, List<MessagePair> messages,
-			UpdateID updateID) throws InterruptedException {
-		log.error("My: Starting Second Phase");
+			List<IOFSwitch> unconfirmedSwitches) throws InterruptedException {
+		log.error("My: Starting Second Phase with xid: "
+				+ this._updateID.toString());
 
 		List<IOFSwitch> unfinishedSwitches = null;
 		if (unconfirmedSwitches.size() > 0) {
-			log.error("My: Rolling Back");
-			log.error(unconfirmedSwitches.toString());
+			log.error("My: Rolling Back" + unconfirmedSwitches.toString());
 			// Rollback
-			List<IOFSwitch> readySwitches = new ArrayList<>(affectedSwitches);
-			readySwitches.removeAll(unconfirmedSwitches);
+			List<IOFSwitch> confirmedSwitches = new ArrayList<>(
+					this._affectedSwitches);
+			confirmedSwitches.removeAll(unconfirmedSwitches);
 
-			updateService.rollback(readySwitches, updateID.toLong());
+			this._updateService
+					.rollback(confirmedSwitches, this._updateID.toLong());
 			log.error("My: Rolledback");
 		} else {
 			log.error("My: Committing");
 			// Commit
-			updateService.commit(affectedSwitches, updateID.toLong());
+			this._updateService.commit(this._affectedSwitches,
+					this._updateID.toLong());
 			Thread.sleep(FINISH_TIMEOUT_MS); // TODO how long to wait? Or
 												// actively check
 			// whats inside messages?
 
-			unfinishedSwitches = getUnfinishedSwitches(messages,
-					affectedSwitches);
+			unfinishedSwitches = getUnfinishedSwitches();
 			log.error("My: Encountered " + unfinishedSwitches.size()
 					+ " unfinished Switches: " + unfinishedSwitches.toString());
 		}
@@ -238,12 +239,12 @@ public class SetPathResource extends ServerResource {
 		Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods = new HashMap<>();
 		IOFSwitch currentSwitch;
 		OFFlowAdd currentFlowMod;
+
 		long xid = updateID.toLong();
 
 		for (FlowModDTO currentFlowModDTO : flowModDTOs) {
 			currentSwitch = getAffectedSwitch(switchService, currentFlowModDTO);
 			currentFlowMod = createFlowMod(currentFlowModDTO, xid);
-
 			if (currentFlowMod == null || currentSwitch == null) {
 				return null;
 			}
@@ -254,52 +255,24 @@ public class SetPathResource extends ServerResource {
 		return switchesAndFlowMods;
 	}
 
-	public List<IOFSwitch> getUnconfirmedSwitches(List<MessagePair> messages,
-			List<IOFSwitch> affectedSwitches) {
-		List<IOFSwitch> unconfirmedSwitches = new ArrayList<>(affectedSwitches);
-		IOFSwitch messageSwitch;
-		OFMessage currentMessage;
-		boolean elemIsRemoved;
-
-		for (MessagePair currentMP : messages) {
-			messageSwitch = currentMP.ofswitch;
-			currentMessage = currentMP.ofmsg;
-			if (currentMessage.toString().contains(
-					"bundleCtrlType=COMMIT_REPLY")
-					&& currentMessage.toString().contains("OFBundleCtrlMsg")) {
-				elemIsRemoved = unconfirmedSwitches.remove(messageSwitch);
-				if (!elemIsRemoved) {
-					log.error("My: Confirmed Switch could not be removed: "
-							+ messageSwitch.getId().toString());
-				}
-			}
-		}
-
-		return unconfirmedSwitches;
+	public List<IOFSwitch> getUnconfirmedSwitches() {
+		return getAllSwitchesNotInState(IACIDUpdaterService.ASPSwitchStates.CONFIRMED);
 	}
 
-	public List<IOFSwitch> getUnfinishedSwitches(List<MessagePair> messages,
-			List<IOFSwitch> affectedSwitches) {
-		List<IOFSwitch> unfinishedSwitches = new ArrayList<>(affectedSwitches);
-		IOFSwitch messageSwitch;
-		OFMessage currentMessage;
-		boolean elemIsRemoved;
+	public List<IOFSwitch> getUnfinishedSwitches() {
+		return getAllSwitchesNotInState(IACIDUpdaterService.ASPSwitchStates.FINISHED);
+	}
 
-		for (MessagePair currentMP : messages) {
-			messageSwitch = currentMP.ofswitch;
-			currentMessage = currentMP.ofmsg;
-			if (currentMessage.toString().contains("code=UNKNOWN")
-					&& currentMessage.toString().contains(
-							"OFFlowModFailedErrorMsg")) {
-				elemIsRemoved = unfinishedSwitches.remove(messageSwitch);
-				if (!elemIsRemoved) {
-					log.error("My: Finished Switch could not be removed: "
-							+ messageSwitch.getId().toString());
-				}
+	public List<IOFSwitch> getAllSwitchesNotInState(
+			IACIDUpdaterService.ASPSwitchStates unwantedState) {
+		List<IOFSwitch> result = new ArrayList<>();
+		for (Entry<IOFSwitch, ASPSwitchStates> currentState : this._switchStates
+				.entrySet()) {
+			if (currentState.getValue() != unwantedState) {
+				result.add(currentState.getKey());
 			}
 		}
-
-		return unfinishedSwitches;
+		return result;
 	}
 
 	// Create a Flowmod that someone has to write to a switch with:

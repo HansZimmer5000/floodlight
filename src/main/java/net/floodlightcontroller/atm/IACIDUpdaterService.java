@@ -1,5 +1,7 @@
 package net.floodlightcontroller.atm;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -13,9 +15,14 @@ import net.floodlightcontroller.core.module.IFloodlightService;
 
 //TODO maybe this needs a rename since it doesn do the full update itself and it rather a holder for the receiving messages and communicator to the switches.
 public interface IACIDUpdaterService extends IFloodlightService, IOFMessageListener {
-	public UpdateID createNewUpdateIDAndPrepareMessages();
+	public enum ASPSwitchStates {
+		DEFAULT, CONFIRMED, REJECTED, FINISHED
+	}
 	
-	public List<MessagePair> getMessages(UpdateID updateID);
+	public UpdateID createNewUpdateID();
+	public void initXIDStates(UpdateID updateID, ArrayList<IOFSwitch> affectedSwitches);
+	
+	public HashMap<IOFSwitch, ASPSwitchStates> getMessages(UpdateID updateID);
 	
 	public void voteLock(Map<IOFSwitch, OFFlowAdd> switchesAndFlowMods);
 	

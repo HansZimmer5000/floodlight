@@ -7,7 +7,9 @@ import java.util.Map;
 
 import org.projectfloodlight.openflow.protocol.BundleIdGenerator;
 import org.projectfloodlight.openflow.protocol.BundleIdGenerators;
+import org.projectfloodlight.openflow.protocol.OFBundleCtrlMsg;
 import org.projectfloodlight.openflow.protocol.OFBundleCtrlType;
+import org.projectfloodlight.openflow.protocol.OFErrorMsg;
 import org.projectfloodlight.openflow.protocol.OFFactory;
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
 import org.projectfloodlight.openflow.protocol.OFMessage;
@@ -22,20 +24,19 @@ import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.IOFSwitch;
 
 public class ACIDUpdaterService implements IACIDUpdaterService {
-
 	protected static Logger log = LoggerFactory
 			.getLogger(SetPathResource.class);
 
 	BundleIdGenerator bundleIdGenerator;
-	Map<UpdateID, List<MessagePair>> messages;
-	byte atmID;
+	Map<UpdateID, HashMap<IOFSwitch, IACIDUpdaterService.ASPSwitchStates>> states;
+	long atmID;
 
 	final OFFactory FACTORY = new OFFactoryVer14();
 	final TableId ASP_TABLE_ID = TableId.of(255);
 
 	public ACIDUpdaterService() {
 		this.bundleIdGenerator = BundleIdGenerators.global();
-		messages = new HashMap<>();
+		states = new HashMap<>();
 		this.atmID = UpdateID.createNewATMID();
 	}
 
@@ -63,20 +64,85 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 		// - OFPT_BUNDLE_CONTROL + OFPBCT_COMMIT_REPLY = CONFIRM
 
 		UpdateID updateId = UpdateID.ofValue(msg.getXid());
-		MessagePair newPair = new MessagePair(sw, msg);
 
-		log.debug("Got OpenFlow Message: " + updateId.toString());
+		log.error("My: Got OpenFlow Message (XID=" + updateId.toString()
+				+ ") (Type=" + msg.getType().toString() + ")");
 
-		List<MessagePair> currentList = this.messages.get(updateId);
-		if (currentList == null) {
-			log.debug("Unkown xid, creating new List");
-			currentList = new ArrayList<>();
+		HashMap<IOFSwitch, IACIDUpdaterService.ASPSwitchStates> currentMap = this.states
+				.get(updateId);
+
+		if (currentMap == null) {
+			log.error("My: Got Message with unkown XID");
+		} else {
+			adjustSwitchState(currentMap, sw, msg);
+			this.states.put(updateId, currentMap);
 		}
 
-		currentList.add(newPair);
-		this.messages.put(updateId, currentList);
-
 		return Command.CONTINUE;
+	}
+
+	private void adjustSwitchState(
+			HashMap<IOFSwitch, IACIDUpdaterService.ASPSwitchStates> currentMap,
+			IOFSwitch sw, OFMessage msg) {
+		log.error("My: Adjust Switch(" + sw.getId().toString() + "/" + currentMap.get(sw) + ") states due to msg: "+ msg.getType());
+		switch (msg.getType()) {
+		case BUNDLE_CONTROL:
+			// Detect Confirm
+			OFBundleCtrlMsg bundleCtrl = (OFBundleCtrlMsg) msg;
+			switch (bundleCtrl.getBundleCtrlType()) {
+			case COMMIT_REPLY:
+				// Confirm
+				// Next Check is important as a bundle_msg_failed error will be received before this bundle_commit message! So this message will always the received, the question is if an error (REJECT) was received before.
+				if (IACIDUpdaterService.ASPSwitchStates.DEFAULT == currentMap
+						.get(sw)) {
+					currentMap.put(sw,
+							IACIDUpdaterService.ASPSwitchStates.CONFIRMED);
+					log.error("My: Switch(" + sw.getId().toString() + ") is now in state CONFIRMED");
+				} else {
+					log.error("My: Could not CONFIRM due to wrong state: " + currentMap
+						.get(sw));
+				}
+				break;
+			default:
+				break;
+			}
+			break;
+		case ERROR:
+			// Detect Reject and Finish
+			OFErrorMsg error = (OFErrorMsg) msg;
+			switch (error.getErrType()) {
+			case BUNDLE_FAILED:
+				// Reject
+				if (IACIDUpdaterService.ASPSwitchStates.DEFAULT == currentMap
+						.get(sw)) {
+					currentMap.put(sw,
+							IACIDUpdaterService.ASPSwitchStates.REJECTED);
+					log.error("My: Switch(" + sw.getId().toString() + ") is now in state REJECTED");
+				} else {
+					log.error("My: Could not REJECT due to wrong state: " + currentMap
+						.get(sw));
+				}
+				break;
+			case FLOW_MOD_FAILED:
+				// Finish
+				if (IACIDUpdaterService.ASPSwitchStates.CONFIRMED == currentMap
+						.get(sw)) {
+					currentMap.put(sw,
+							IACIDUpdaterService.ASPSwitchStates.FINISHED);
+					log.error("My: Switch(" + sw.getId().toString() + ") is now in state FINISHED");
+				} else {
+					log.error("My: Could not FINISH due to wrong state: " + currentMap
+						.get(sw));
+				}
+				break;
+			default:
+				break;
+			}
+			break;
+		default:
+			break;
+		}
+
 	}
 
 	@Override
@@ -85,12 +151,14 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 		long currentXid;
 		OFMessage currentOpenBundle, currentLock, currentLockBundle, currentUpdate, currentUpdateBundle, currentCommitBundle;
 		ArrayList<OFMessage> currentMessages;
-		
+
 		for (IOFSwitch currentSwitch : switchesAndFlowMods.keySet()) {
 			currentBundleId = this.bundleIdGenerator.nextBundleId();
 			currentUpdate = switchesAndFlowMods.get(currentSwitch);
 			currentXid = currentUpdate.getXid();
-			
+			log.error("Sending VoteLock Xid="
+					+ UpdateID.ofValue(currentXid).toString());
+
 			currentMessages = new ArrayList<>();
 
 			// OFPBCT_OPEN_REQUEST
@@ -132,8 +200,11 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 		OFMessage currentMsg;
 
 		for (IOFSwitch currentSwitch : switches) {
+			log.error("Sending Rollback Xid="
+					+ UpdateID.ofValue(xid).toString());
 			currentMsg = this.FACTORY.buildFlowDeleteStrict()
-					.setTableId(this.ASP_TABLE_ID).setXid(xid).setPriority(65535).build();
+					.setTableId(this.ASP_TABLE_ID).setXid(xid)
+					.setPriority(65535).build();
 			currentSwitch.write(currentMsg);
 		}
 	}
@@ -145,6 +216,7 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 		OFMessage currentMsg;
 
 		for (IOFSwitch currentSwitch : switches) {
+			log.error("Sending Commit Xid=" + UpdateID.ofValue(xid).toString());
 			currentMsg = this.FACTORY.buildFlowDelete().setXid(xid)
 					.setTableId(this.ASP_TABLE_ID).setPriority(65535).build();
 			currentSwitch.write(currentMsg);
@@ -152,17 +224,26 @@ public class ACIDUpdaterService implements IACIDUpdaterService {
 	}
 
 	@Override
-	public UpdateID createNewUpdateIDAndPrepareMessages() {
+	public UpdateID createNewUpdateID() {
 		UpdateID updateID = new UpdateID(this.atmID);
-
-		this.messages.put(updateID, new ArrayList<MessagePair>());
-
 		return updateID;
+	}
+	
+	@Override
+	public void initXIDStates(UpdateID updateID, ArrayList<IOFSwitch> affectedSwitches) {
+		HashMap<IOFSwitch, IACIDUpdaterService.ASPSwitchStates> newMap = new HashMap<>();
+		for (IOFSwitch currentSwitch : affectedSwitches) {
+			newMap.put(currentSwitch,
+					IACIDUpdaterService.ASPSwitchStates.DEFAULT);
+		}
+		this.states.put(updateID, newMap);
 	}
 
 	@Override
-	public List<MessagePair> getMessages(UpdateID updateID) {
-		List<MessagePair> result = this.messages.get(updateID);
+	public HashMap<IOFSwitch, IACIDUpdaterService.ASPSwitchStates> getMessages(
+			UpdateID updateID) {
+		HashMap<IOFSwitch, IACIDUpdaterService.ASPSwitchStates> result = this.states
+				.get(updateID);
 		return result;
 	}
 }
