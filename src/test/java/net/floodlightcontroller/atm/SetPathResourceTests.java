@@ -5,6 +5,7 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -453,7 +454,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 	}
 
 	@Test
-	public void whenGetUnconfirmedSwitches_thenCorrect1() throws Exception {
+	public void whenGetUnresponsiveSwitchesPhase1WithTimeout_thenCorrect1() throws Exception {
 		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
 		affectedSwitches.add(this.testSwitch1);		
 		
@@ -462,13 +463,13 @@ public class SetPathResourceTests extends FloodlightTestCase {
 
 		this.testSPR._switchStates = states;
 		this.testSPR._affectedSwitches = affectedSwitches;
-		List<IOFSwitch> result = this.testSPR.getUnconfirmedSwitches();
+		List<IOFSwitch> result = this.testSPR.getUnresponsiveSwitchesPhase1WithTimeout();
 
 		Assert.assertEquals(0, result.size());
 	}
 
 	@Test
-	public void whenGetUnconfirmedSwitches_thenCorrect2() throws Exception {
+	public void whenGetUnresponsiveSwitchesPhase1WithTimeout_thenCorrect2() throws Exception {
 		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
 		affectedSwitches.add(this.testSwitch1);
 
@@ -477,14 +478,14 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		
 		this.testSPR._switchStates = states;
 		this.testSPR._affectedSwitches = affectedSwitches;
-		List<IOFSwitch> result = this.testSPR.getUnconfirmedSwitches();
+		List<IOFSwitch> result = this.testSPR.getUnresponsiveSwitchesPhase1WithTimeout();
 
 		Assert.assertEquals(1, result.size());
 		Assert.assertEquals(this.testSwitch1, result.get(0));
 	}
 
 	@Test
-	public void whenGetUnconfirmedSwitches_thenCorrect3() throws Exception {
+	public void whenGetUnresponsiveSwitchesPhase1WithTimeout_thenCorrect3() throws Exception {
 		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
 		affectedSwitches.add(this.testSwitch1);
 		
@@ -493,14 +494,14 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		
 		this.testSPR._switchStates = states;
 		this.testSPR._affectedSwitches = affectedSwitches;
-		List<IOFSwitch> result = this.testSPR.getUnconfirmedSwitches();
+		List<IOFSwitch> result = this.testSPR.getUnresponsiveSwitchesPhase1WithTimeout();
 
 		Assert.assertEquals(1, result.size());
 		Assert.assertEquals(this.testSwitch1, result.get(0));
 	}
 
 	@Test
-	public void whenGetUnfinishedSwitches_thenCorrect1() throws Exception {
+	public void whenGetUnresponsiveSwitchesPhase2WithTimeout_thenCorrect1() throws Exception {
 		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
 		affectedSwitches.add(this.testSwitch1);
 
@@ -509,13 +510,13 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		
 		this.testSPR._switchStates = states;
 		this.testSPR._affectedSwitches = affectedSwitches;
-		List<IOFSwitch> result = this.testSPR.getUnfinishedSwitches();
+		List<IOFSwitch> result = this.testSPR.getUnresponsiveSwitchesPhase2WithTimeout();
 
 		Assert.assertEquals(0, result.size());
 	}
 
 	@Test
-	public void whenGetUnfinishedSwitches_thenCorrect2() throws Exception {
+	public void whenGetUnresponsiveSwitchesPhase2WithTimeout_thenCorrect2() throws Exception {
 		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
 		affectedSwitches.add(this.testSwitch1);
 		
@@ -524,14 +525,14 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		
 		this.testSPR._switchStates = states;
 		this.testSPR._affectedSwitches = affectedSwitches;
-		List<IOFSwitch> result = this.testSPR.getUnfinishedSwitches();
+		List<IOFSwitch> result = this.testSPR.getUnresponsiveSwitchesPhase2WithTimeout();
 
 		Assert.assertEquals(1, result.size());
 		Assert.assertEquals(this.testSwitch1, result.get(0));
 	}
 
 	@Test
-	public void whenGetUnfinishedSwitches_thenCorrect3() throws Exception {
+	public void whenGetUnresponsiveSwitchesPhase2WithTimeout_thenCorrect3() throws Exception {
 		ArrayList<IOFSwitch> affectedSwitches = new ArrayList<>();
 		affectedSwitches.add(this.testSwitch1);
 		
@@ -540,7 +541,7 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		
 		this.testSPR._switchStates = states;
 		this.testSPR._affectedSwitches = affectedSwitches;
-		List<IOFSwitch> result = this.testSPR.getUnfinishedSwitches();
+		List<IOFSwitch> result = this.testSPR.getUnresponsiveSwitchesPhase2WithTimeout();
 
 		Assert.assertEquals(1, result.size());
 		Assert.assertEquals(this.testSwitch1, result.get(0));
@@ -653,5 +654,17 @@ public class SetPathResourceTests extends FloodlightTestCase {
 		this.testSPR._switchService = this.mockSwitchManager;
 		this.testSPR._updateService = this.testUpdaterService;
 		this.testSPR.prepareUpdate(this.testMessagesRaw, true);
+	}
+	
+	@Test
+	public void whenCheck_thenCorrect(){
+		this.testSPR._affectedSwitches = new ArrayList<>();
+		this.testSPR._switchStates = new HashMap<>();
+		System.out.println(System.currentTimeMillis());
+		List<IOFSwitch> result = this.testSPR.getUnresponsiveSwitchesPhase1WithTimeout();
+		System.out.println(System.currentTimeMillis());
+		
+		Assert.assertNotNull(result);
+		Assert.assertEquals(0, result.size());
 	}
 }

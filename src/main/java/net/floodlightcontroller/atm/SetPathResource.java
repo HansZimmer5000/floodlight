@@ -5,13 +5,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import net.floodlightcontroller.atm.IACIDUpdaterService.ASPSwitchStates;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
 
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
-import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
@@ -34,8 +40,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class SetPathResource extends ServerResource {
 	protected static Logger log = LoggerFactory
 			.getLogger(SetPathResource.class);
-	static final long ASP_TIMEOUT_MS = 2000;
-	static final long FINISH_TIMEOUT_MS = 2000;
+	static final long ASP_CONFIRM_TIMEOUT_MS = 1500;
+	static final long ASP_FINISH_TIMEOUT_MS = 1000;
 
 	public UpdateID _updateID;
 	public ArrayList<FlowModDTO> _flowModDTOs;
@@ -43,7 +49,7 @@ public class SetPathResource extends ServerResource {
 	public IACIDUpdaterService _updateService;
 	public IOFSwitchService _switchService;
 	public ArrayList<IOFSwitch> _affectedSwitches;
-	public HashMap<IOFSwitch, IACIDUpdaterService.ASPSwitchStates> _switchStates;
+	public HashMap<IOFSwitch, ASPSwitchStates> _switchStates;
 
 	@Put
 	public String SetPath(String jsonBody) {
@@ -160,7 +166,6 @@ public class SetPathResource extends ServerResource {
 		this._updateService.initXIDStates(this._updateID,
 				this._affectedSwitches);
 
-			
 		this._switchStates = this._updateService.getMessages(this._updateID);
 	}
 
@@ -172,8 +177,9 @@ public class SetPathResource extends ServerResource {
 
 		// State 1: No Answer - Do Nothing
 		// State 2: Rejected - Do Nothing
-		// State 3: Confirmed - Rollback (confirmed Switches) or Commit (confirmed Switches)
-		
+		// State 3: Confirmed - Rollback (confirmed Switches) or Commit
+		// (confirmed Switches)
+
 		// Rollback or Commit + wait for finishes
 		List<IOFSwitch> unfinished = executeSecondPhase(unconfirmedSwitches);
 		return unfinished;
@@ -183,13 +189,11 @@ public class SetPathResource extends ServerResource {
 		log.error("My: Starting First Phase with xid: "
 				+ this._updateID.toString());
 		this._updateService.voteLock(this._switchesAndFlowMods);
-		Thread.sleep(ASP_TIMEOUT_MS);// TODO how long to wait? Or actively check
-		// whats inside messages?
 
+		List<IOFSwitch> unconfirmedSwitches = getUnresponsiveSwitchesPhase1WithTimeout();
+		
 		log.error("My: Checking received messages of XID: "
-				+ this._updateID.toString() + "\n"
-				+ this._switchStates);
-		List<IOFSwitch> unconfirmedSwitches = getUnconfirmedSwitches();
+				+ this._updateID.toString() + "\n" + this._switchStates);
 		return unconfirmedSwitches;
 	}
 
@@ -206,19 +210,16 @@ public class SetPathResource extends ServerResource {
 					this._affectedSwitches);
 			confirmedSwitches.removeAll(unconfirmedSwitches);
 
-			this._updateService
-					.rollback(confirmedSwitches, this._updateID.toLong());
+			this._updateService.rollback(confirmedSwitches,
+					this._updateID.toLong());
 			log.error("My: Rolledback");
 		} else {
 			log.error("My: Committing");
 			// Commit
 			this._updateService.commit(this._affectedSwitches,
 					this._updateID.toLong());
-			Thread.sleep(FINISH_TIMEOUT_MS); // TODO how long to wait? Or
-												// actively check
-			// whats inside messages?
 
-			unfinishedSwitches = getUnfinishedSwitches();
+			unfinishedSwitches = getUnresponsiveSwitchesPhase2WithTimeout();
 			log.error("My: Encountered " + unfinishedSwitches.size()
 					+ " unfinished Switches: " + unfinishedSwitches.toString());
 		}
@@ -256,20 +257,80 @@ public class SetPathResource extends ServerResource {
 		return switchesAndFlowMods;
 	}
 
-	public List<IOFSwitch> getUnconfirmedSwitches() {
-		return getAllSwitchesNotInState(IACIDUpdaterService.ASPSwitchStates.CONFIRMED);
+	public List<IOFSwitch> getUnresponsiveSwitchesPhase1WithTimeout() {
+		ASPSwitchStates[] unwantedStates = new ASPSwitchStates[] {
+				ASPSwitchStates.CONFIRMED, ASPSwitchStates.REJECTED };
+		List<IOFSwitch> unconfirmedAndUnrejected = waitForResponses(ASP_CONFIRM_TIMEOUT_MS, unwantedStates);
+		
+		return getAllSwitchesNotInState(new ASPSwitchStates[] {ASPSwitchStates.CONFIRMED});
 	}
 
-	public List<IOFSwitch> getUnfinishedSwitches() {
-		return getAllSwitchesNotInState(IACIDUpdaterService.ASPSwitchStates.FINISHED);
+	public List<IOFSwitch> getUnresponsiveSwitchesPhase2WithTimeout() {
+		ASPSwitchStates[] unwantedStates = new ASPSwitchStates[] {
+				ASPSwitchStates.FINISHED };
+		return waitForResponses(ASP_FINISH_TIMEOUT_MS, unwantedStates);
+	}
+	
+	public List<IOFSwitch> waitForResponses(long timeoutMS, ASPSwitchStates[] unwantedStates){
+		ExecutorService executor = Executors.newSingleThreadExecutor();
+
+		SwitchStateChecker callable = new SwitchStateChecker(this,
+				unwantedStates);
+		Future<List<IOFSwitch>> handler = executor.submit(callable);
+		try {
+			return handler.get(timeoutMS, TimeUnit.MILLISECONDS);
+		} catch (InterruptedException | ExecutionException | TimeoutException e) {
+			System.out.println("Exception");
+			handler.cancel(true);
+		}
+
+		executor.shutdownNow();
+		return callable.lastResult;
+	}
+	
+	public class SwitchStateChecker implements Callable<List<IOFSwitch>> {
+
+		public SetPathResource res;
+		public ASPSwitchStates[] unwantedStates;
+		public List<IOFSwitch> lastResult = null;
+
+		public SwitchStateChecker(SetPathResource res,
+				ASPSwitchStates[] unwantedStates) {
+			this.res = res;
+			this.unwantedStates = unwantedStates;
+		}
+
+		@Override
+		public List<IOFSwitch> call() throws Exception {
+			// Thread.sleep(2000l);
+			do {
+				// TODO only check unresponsive Switches again (f.e. have a
+				// second list that only contains unresponsive switches and only
+				// check this list in every loop)
+				lastResult = this.res
+						.getAllSwitchesNotInState(this.unwantedStates);
+				Thread.sleep(10);
+			} while (lastResult.size() > 0);
+
+			return lastResult;
+		}
 	}
 
 	public List<IOFSwitch> getAllSwitchesNotInState(
-			IACIDUpdaterService.ASPSwitchStates unwantedState) {
+			ASPSwitchStates[] unwantedStates) {
 		List<IOFSwitch> result = new ArrayList<>();
+		boolean inUnwantedState;
 		for (Entry<IOFSwitch, ASPSwitchStates> currentState : this._switchStates
 				.entrySet()) {
-			if (currentState.getValue() != unwantedState) {
+			inUnwantedState = false;
+			for (ASPSwitchStates currentUnwantedState : unwantedStates) {
+				if (currentState.getValue() == currentUnwantedState) {
+					inUnwantedState = true;
+					break;
+				}
+			}
+
+			if (!inUnwantedState) {
 				result.add(currentState.getKey());
 			}
 		}
