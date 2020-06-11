@@ -86,6 +86,7 @@ public class SetPathResource extends ServerResource {
 							log.error("My: Updated network");
 							if (unfinishedSwitches == null) {
 								log.error("My: Update rolledback");
+								message = "Could not update due to ASP conform behaviour (lock set / rule conflict)";
 							} else if (unfinishedSwitches.size() == 0) {
 								status = Status.SUCCESS_NO_CONTENT;
 							} else {
