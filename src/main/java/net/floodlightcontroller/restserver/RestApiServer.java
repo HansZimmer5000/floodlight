@@ -159,6 +159,10 @@ public class RestApiServer implements IFloodlightModule, IRestApiService {
 					parameters.add("truststoreType", "JKS");
 
 					parameters.add("needClientAuthentication", RestApiServer.httpsNeedClientAuth);
+					
+					// ATM Adjustment (for 20 Thread Server CPU)
+					parameters.add("threadPool.maxThreads", "64");
+					parameters.add("maxThreads", "64");
 				}
 
 				if (RestApiServer.useHttp) {
