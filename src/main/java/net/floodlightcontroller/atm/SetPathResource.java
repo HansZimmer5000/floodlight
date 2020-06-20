@@ -309,7 +309,7 @@ public class SetPathResource extends ServerResource {
 				// check this list in every loop)
 				lastResult = this.res
 						.getAllSwitchesNotInState(this.unwantedStates);
-				Thread.sleep(1);
+				Thread.sleep(10);
 			} while (lastResult.size() > 0);
 
 			return lastResult;
